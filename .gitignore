@@ -1,0 +1,10 @@
+.clangd/
+.DS_Store
+.vscode/
+build/
+compile_commands.json
+untracked/
+.cache
+config.joml
+**/__pycache__
+*.*~
