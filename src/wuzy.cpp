@@ -355,41 +355,57 @@ namespace {
             assert(false && "Invalid number of points in simplex");
         }
     }
+
+    std::optional<Simplex3d> gjk(const Collider& c1, const Collider& c2)
+    {
+        // As the initial direction we choose the x-axis. We want to bias the search towards the
+        // origin/point of collision, so it would make sense to use the relative vector between the
+        // centers of the shapes.
+        // Casey says it doesn't really matter what we start with, because it converges really
+        // quickly.
+        Vec3 direction = Vec3 { 1.0f, 0.0f, 0.0f };
+
+        const auto a0 = support(c1, c2, direction);
+
+        Simplex3d simplex;
+        simplex = { a0 };
+
+        // Choose dir towards the origin: a0 -> O = O - a0 = -a0.
+        direction = -a0;
+
+        while (true) {
+            const auto a = support(c1, c2, direction);
+            if (a.dot(direction) < 0.0f) {
+                // No Intersection:
+                // We went towards the origin (direction points towards the origin) and the next
+                // supporting point we found was away from the origin instead. That means we did not
+                // "cross" the origin and there is no way to include the origin.
+                return std::nullopt;
+            }
+
+            simplex.pushFront(a);
+
+            auto res = nextSimplex(simplex, direction);
+            if (res.containsOrigin) {
+                return res.simplex;
+            }
+            simplex = std::move(res.simplex);
+            direction = res.direction;
+        }
+    }
 }
 
 bool testCollision(const Collider& c1, const Collider& c2)
 {
-    // As the initial direction we choose the x-axis. We want to bias the search towards the
-    // origin/point of collision, so it would make sense to use the relative vector between the
-    // centers of the shapes.
-    Vec3 direction = Vec3 { 1.0f, 0.0f, 0.0f };
+    return gjk(c1, c2).has_value();
+}
 
-    const auto a0 = support(c1, c2, direction);
-
-    Simplex3d simplex;
-    simplex = { a0 };
-
-    // Choose dir towards the origin: a0 -> O = O - a0 = -a0.
-    direction = -a0;
-
-    while (true) {
-        const auto a = support(c1, c2, direction);
-        if (a.dot(direction) < 0.0f) {
-            // No Intersection:
-            // We went towards the origin (direction points towards the origin) and the next
-            // supporting point we found was away from the origin instead. That means we did not
-            // "cross" the origin and there is no way to include the origin.
-            return false;
-        }
-
-        simplex.pushFront(a);
-
-        auto res = nextSimplex(simplex, direction);
-        simplex = std::move(res.simplex);
-        direction = res.direction;
-        if (res.containsOrigin) {
-            return true;
-        }
+std::optional<Collision> getCollision(const Collider& a, const Collider& b)
+{
+    const auto gjkRes = gjk(a, b);
+    if (!gjkRes) {
+        return std::nullopt;
     }
+    return Collision {};
 }
 }

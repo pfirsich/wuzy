@@ -80,7 +80,10 @@ private:
     Mat4 transform_;
 };
 
-struct Collision { };
+struct Collision {
+    Vec3 collisionNormal;
+    float penetrationDepth;
+};
 
 bool testCollision(const Collider& a, const Collider& b);
 std::optional<Collision> getCollision(const Collider& a, const Collider& b);
