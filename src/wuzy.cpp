@@ -252,11 +252,11 @@ namespace {
         {
             // This actually just needs to go until size_, but with N being a compile-time constant
             // it might be more likely the compiler unrolls this loop.
-            for (size_t i = 1; i < N; ++i) {
+            for (size_t i = N - 1; i > 0; --i) {
                 elements_[i] = elements_[i - 1];
             }
             elements_[0] = std::move(v);
-            size_ = std::max(size_ + 1, N);
+            size_ = std::min(size_ + 1, N);
         }
 
         const Vec3& operator[](size_t i) const
