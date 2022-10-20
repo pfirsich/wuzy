@@ -324,11 +324,13 @@ namespace {
         // half-space at a in the direction of b -> a, <2>).
         // If ao and ab are in the same half-space, the origin is between a and b (<1>).
         if (sameHalfSpace(ab, ao) > 0.0f) {
+            // <1>
             // ab.cross(ao) will give us a vector perpendicular to ab and ao. The second cross
             // product will give us a vector that is coplanar with ab and ao and perpendicular
             // to ab. This is roughly the vector from the line ab towards the origin.
             return { simplex, ab.cross(ao).cross(ab), false };
         } else {
+            // <2>
             // If ao and ab are not in the same half-space, the origin is "after"/"beyond" a (<2>).
             // This means that the origin is not in the direction of b and it will not help us
             // enclose the origin, so we throw it away.
@@ -393,16 +395,19 @@ namespace {
             // Now we still need to distinguish <1> and <5> by checking whether the origin is
             // towards C (<1>) or away from C (<5>).
             if (sameHalfSpace(ac, ao)) {
-                // The direction is a vector orthogonal to the edge `ac`, but pointing towards the
-                // origin.
+                // <1>
+                // The direction is a vector orthogonal to the edge `ac`, but pointing towards
+                // the origin.
                 return { { a, c }, ac.cross(ao).cross(ac), false };
             } else {
+                // <5>
                 return line({ a, b }, direction);
             }
         } else {
             // `ab.cross(abc)` is the normal of the plane that contains a and b, so we are checking
             // for region <4>.
             if (sameHalfSpace(ab.cross(abc), ao)) {
+                // <4>
                 return line({ a, b }, direction);
             } else {
                 // <2> or <3> are left
