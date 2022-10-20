@@ -46,9 +46,115 @@ Vec3 Vec3::operator*(float s) const
 {
     return Vec3 { s * x, s * y, s * z };
 }
+
 Vec3 Vec3::operator/(float s) const
 {
     return Vec3 { x / s, y / s, z / s };
+}
+
+Vec4::Vec4(float x, float y, float z, float w)
+    : x(x)
+    , y(y)
+    , z(z)
+    , w(w)
+{
+}
+
+Vec4::Vec4(const Vec3& v, float w)
+    : x(v.x)
+    , y(v.y)
+    , z(v.z)
+    , w(w)
+{
+}
+
+float Vec4::dot(const Vec4& other) const
+{
+    return x * other.x + y * other.y + z * other.z + w * other.w;
+}
+
+float Vec4::length() const
+{
+    return std::sqrt(dot(*this));
+}
+
+Vec4 Vec4::operator/(float s) const
+{
+    return Vec4 { x / s, y / s, z / s, w / s };
+}
+
+Vec4::operator Vec3() const
+{
+    return Vec3 { x, y, z };
+}
+
+Mat4 Mat4::transpose() const
+{
+    return {
+        Vec4 { cols[0].x, cols[1].x, cols[2].x, cols[3].x },
+        Vec4 { cols[0].y, cols[1].y, cols[2].y, cols[3].y },
+        Vec4 { cols[0].z, cols[1].z, cols[2].z, cols[3].z },
+        Vec4 { cols[0].w, cols[1].w, cols[2].w, cols[3].w },
+    };
+}
+
+Mat4 Mat4::operator*(const Mat4& m) const
+{
+    const auto r = transpose().cols;
+    return Mat4 {
+        Vec4 { r[0].dot(m.cols[0]), r[1].dot(m.cols[0]), r[2].dot(m.cols[0]), r[3].dot(m.cols[0]) },
+        Vec4 { r[0].dot(m.cols[1]), r[1].dot(m.cols[1]), r[2].dot(m.cols[1]), r[3].dot(m.cols[1]) },
+        Vec4 { r[0].dot(m.cols[2]), r[1].dot(m.cols[2]), r[2].dot(m.cols[2]), r[3].dot(m.cols[2]) },
+        Vec4 { r[0].dot(m.cols[3]), r[1].dot(m.cols[3]), r[2].dot(m.cols[3]), r[3].dot(m.cols[3]) },
+    };
+}
+
+Vec4 Mat4::operator*(const Vec4& v) const
+{
+    const auto rows = transpose().cols;
+    return Vec4 { rows[0].dot(v), rows[1].dot(v), rows[2].dot(v), rows[3].dot(v) };
+}
+
+Mat4 Mat4::translate(const Vec3& v)
+{
+    return {
+        Vec4 { 1.0f, 0.0f, 0.0f, 0.0f },
+        Vec4 { 0.0f, 1.0f, 0.0f, 0.0f },
+        Vec4 { 0.0f, 0.0f, 1.0f, 0.0f },
+        Vec4 { v.x, v.y, v.z, 1.0f },
+    };
+}
+
+Mat4 Mat4::scale(const Vec3& v)
+{
+    return {
+        Vec4 { v.x, 0.0f, 0.0f, 0.0f },
+        Vec4 { 0.0f, v.y, 0.0f, 0.0f },
+        Vec4 { 0.0f, 0.0f, v.z, 0.0f },
+        Vec4 { 0.0f, 0.0f, 0.0f, 1.0f },
+    };
+}
+
+namespace {
+    Mat4 invertTrs(const Mat4& m)
+    {
+        // inv(TRS) = inv(S) * inv(R) * inv(T) = inv(S) * transpose(R) * inv(T)
+        const auto sx = m.cols[0].length();
+        const auto sy = m.cols[1].length();
+        const auto sz = m.cols[2].length();
+
+        const auto t = Vec3 { m.cols[3].x, m.cols[3].y, m.cols[3].z };
+
+        const auto r = Mat4 {
+            m.cols[0] / sx,
+            m.cols[1] / sy,
+            m.cols[2] / sz,
+            Vec4 { 0.0f, 0.0f, 0.0f, 1.0f },
+        };
+
+        return Mat4::scale(Vec3 { 1.0f / sx, 1.0f / sy, 1.0f / sz }) * r.transpose()
+            * Mat4::translate(-t);
+    }
 }
 
 Vec3 ConvexPolyhedron::support(const Vec3& direction) const
@@ -79,9 +185,27 @@ Vec3 Sphere::support(const Vec3& direction) const
     return direction.normalized() * radius_;
 }
 
-void Collider::addShape(std::unique_ptr<ConvexShape> shape, const Mat4& transform)
+void Collider::addShape(std::unique_ptr<ConvexShape> shape, Mat4 transform)
 {
-    shapes_.push_back(ColliderShape { std::move(shape), transform });
+    const auto inverseTransform = invertTrs(transform);
+    shapes_.push_back(ColliderShape {
+        std::move(shape),
+        std::move(transform),
+        inverseTransform,
+        transform_ * transform,
+        // inv(T * t) = inv(t) * inv(T)
+        inverseTransform * inverseTransform_,
+    });
+}
+
+void Collider::setTransform(const Mat4& transform)
+{
+    transform_ = transform;
+    inverseTransform_ = invertTrs(transform);
+    for (auto& shape : shapes_) {
+        shape.fullTransform = transform_ * shape.transform;
+        shape.inverseFullTransform = shape.inverseTransform * inverseTransform_;
+    }
 }
 
 Vec3 Collider::support(const Vec3& direction) const
@@ -89,11 +213,12 @@ Vec3 Collider::support(const Vec3& direction) const
     Vec3 maxPoint;
     float maxDot = std::numeric_limits<float>::min();
     for (const auto& shape : shapes_) {
-        const auto sup = shape.shape->support(direction);
-        const auto dot = sup.dot(direction);
+        const auto dir = shape.inverseFullTransform * Vec4(direction, 0.0f);
+        const auto sup = shape.shape->support(dir);
+        const auto dot = sup.dot(dir);
         if (dot > maxDot) {
             maxDot = dot;
-            maxPoint = sup;
+            maxPoint = shape.fullTransform * Vec4(sup, 1.0f);
         }
     }
     return maxPoint;
