@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstring>
 
 /* Sources:
  * https://www.youtube.com/watch?v=Qupqu1xe7Io
@@ -206,6 +207,13 @@ void Collider::setTransform(const Mat4& transform)
         shape.fullTransform = transform_ * shape.transform;
         shape.inverseFullTransform = shape.inverseTransform * inverseTransform_;
     }
+}
+
+void Collider::setTransform(const float* transformMatrix)
+{
+    Mat4 matrix;
+    std::memcpy(&matrix.cols[0].x, transformMatrix, sizeof(Mat4));
+    setTransform(matrix);
 }
 
 Vec3 Collider::support(const Vec3& direction) const

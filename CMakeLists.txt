@@ -22,5 +22,8 @@ add_library(wuzy ${SRC})
 target_include_directories(wuzy PUBLIC include/)
 set_wall(wuzy)
 
+add_subdirectory(deps/glwrap)
+
 add_executable(wuzy-test "src/wuzy-test.cpp")
 target_link_libraries(wuzy-test wuzy)
+target_link_libraries(wuzy glwx)

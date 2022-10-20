@@ -105,6 +105,7 @@ public:
     }
 
     void setTransform(const Mat4& transform);
+    void setTransform(const float* transformMatrix);
     Vec3 support(const Vec3& direction) const;
 
 private:
