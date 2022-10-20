@@ -211,7 +211,7 @@ void Collider::setTransform(const Mat4& transform)
 Vec3 Collider::support(const Vec3& direction) const
 {
     Vec3 maxPoint;
-    float maxDot = std::numeric_limits<float>::min();
+    float maxDot = -std::numeric_limits<float>::max();
     for (const auto& shape : shapes_) {
         const auto dir = shape.inverseFullTransform * Vec4(direction, 0.0f);
         const auto sup = shape.shape->support(dir);
