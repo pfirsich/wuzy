@@ -8,3 +8,18 @@ This library is meant to be used for games like that. That means it's not going 
 It will just do collision detection and resolution, no kinematics or dynamics. You can just create colliders and bump them into each other and see what happens.
 
 Most of the games I made were not made with any of the big engines, so I only used a proper physics engine a few times and I hated it quite a bit. It's very restrictive that most of the time you cannot set the position directly (which makes sense, but it is restrictive none the less) and I firmly believe that for most games the optimal physics have nothing to do with real-world kinematics and dynamics, so this library handles collision detection and resolution. No accelerations or forces, no contraints or anything of the sort. Maybe velocites if I ever introduce continuous collision detection.
+
+This is not made for AAA games and millions of colliders. This is for games that hobby gamedevs might make in a gamejam or the average indie game you can get on Steam. It tries to be obvious, easy to integrate and use and not as fast a possible.
+
+Something like this:
+https://docs.godotengine.org/en/stable/classes/class_kinematicbody.html
+
+# TODO:
+* Handle transforms for colliders and shapes
+* Implement getCollision using EPA
+* Acceleration Structure (AABB Tree?)
+* Convex Decomposition
+
+## Later
+* Hill Climbing for Extreme Vertices (Real-Time Collision Detection)
+* Vertex Caching
