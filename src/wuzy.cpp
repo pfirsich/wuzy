@@ -243,7 +243,7 @@ namespace {
         {
             assert(init.size() <= N);
             for (auto it = init.begin(); it != init.end(); ++it) {
-                elements_[std::distance(it, init.begin())] = *it;
+                elements_[std::distance(init.begin(), it)] = *it;
             }
             size_ = init.size();
         }
