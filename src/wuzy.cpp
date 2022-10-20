@@ -214,11 +214,11 @@ Vec3 Collider::support(const Vec3& direction) const
     float maxDot = -std::numeric_limits<float>::max();
     for (const auto& shape : shapes_) {
         const auto dir = shape.inverseFullTransform * Vec4(direction, 0.0f);
-        const auto sup = shape.shape->support(dir);
-        const auto dot = sup.dot(dir);
+        const auto sup = shape.fullTransform * Vec4(shape.shape->support(dir), 1.0f);
+        const auto dot = direction.dot(sup);
         if (dot > maxDot) {
             maxDot = dot;
-            maxPoint = shape.fullTransform * Vec4(sup, 1.0f);
+            maxPoint = sup;
         }
     }
     return maxPoint;
