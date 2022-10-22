@@ -519,7 +519,7 @@ namespace {
         direction = -a0;
 
         size_t numIterations = 0;
-        while (numIterations++ < 64) {
+        while (++numIterations < 64) {
             const auto a = support(c1, c2, direction);
             if (a.dot(direction) < 0.0f) {
                 // No Intersection:
