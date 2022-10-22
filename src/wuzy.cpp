@@ -494,7 +494,14 @@ namespace {
         }
     }
 
-    std::optional<Simplex3d> gjk(const Collider& c1, const Collider& c2)
+
+    struct GjkResult {
+        size_t numIterations;
+        // Simplex that contains the origin, if there is a non-empty intersection
+        std::optional<Simplex3d> simplex;
+    };
+
+    GjkResult gjk(const Collider& c1, const Collider& c2)
     {
         // As the initial direction we choose the x-axis. We want to bias the search towards the
         // origin/point of collision, so it would make sense to use the relative vector between the
@@ -511,37 +518,41 @@ namespace {
         // Choose dir towards the origin: a0 -> O = O - a0 = -a0.
         direction = -a0;
 
-        while (true) {
+        size_t numIterations = 0;
+        while (numIterations++ < 64) {
             const auto a = support(c1, c2, direction);
             if (a.dot(direction) < 0.0f) {
                 // No Intersection:
                 // We went towards the origin (direction points towards the origin) and the next
                 // supporting point we found was away from the origin instead. That means we did not
                 // "cross" the origin and there is no way to include the origin.
-                return std::nullopt;
+                return { numIterations, std::nullopt };
             }
 
             simplex.pushFront(a);
 
             auto res = nextSimplex(simplex, direction);
             if (res.containsOrigin) {
-                return res.simplex;
+                return { numIterations, res.simplex };
             }
             simplex = std::move(res.simplex);
             direction = res.direction;
         }
+
+        // We only reach this if we exceed the maximum number of iterations
+        return { numIterations, std::nullopt };
     }
 }
 
 bool testCollision(const Collider& c1, const Collider& c2)
 {
-    return gjk(c1, c2).has_value();
+    return gjk(c1, c2).simplex.has_value();
 }
 
 std::optional<Collision> getCollision(const Collider& a, const Collider& b)
 {
     const auto gjkRes = gjk(a, b);
-    if (!gjkRes) {
+    if (!gjkRes.simplex) {
         return std::nullopt;
     }
     return Collision {};
