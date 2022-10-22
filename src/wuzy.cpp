@@ -403,23 +403,23 @@ namespace {
                 // <5>
                 return line({ a, b }, direction);
             }
+        }
+
+        // `ab.cross(abc)` is the normal of the plane that contains a and b, so we are checking
+        // for region <4>.
+        if (sameHalfSpace(ab.cross(abc), ao)) {
+            // <4>
+            return line({ a, b }, direction);
+        }
+
+        // <2> or <3> are left
+        if (sameHalfSpace(abc, ao)) {
+            // "above" the triangle
+            return { simplex, abc, false };
         } else {
-            // `ab.cross(abc)` is the normal of the plane that contains a and b, so we are checking
-            // for region <4>.
-            if (sameHalfSpace(ab.cross(abc), ao)) {
-                // <4>
-                return line({ a, b }, direction);
-            } else {
-                // <2> or <3> are left
-                if (sameHalfSpace(abc, ao)) {
-                    // "above" the triangle
-                    return { simplex, abc, false };
-                } else {
-                    // "below" the triangle
-                    // "rewind" the triangle to point "down" instead
-                    return { { a, c, b }, -abc, false };
-                }
-            }
+            // "below" the triangle
+            // "rewind" the triangle to point "down" instead
+            return { { a, c, b }, -abc, false };
         }
     }
 
