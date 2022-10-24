@@ -21,11 +21,16 @@ struct Vec3 {
 
     Vec3 operator-() const;
     Vec3 operator-(const Vec3& other) const;
+    Vec3 operator+(const Vec3& other) const;
     Vec3 operator*(float s) const;
     Vec3 operator/(float s) const;
     bool operator==(const Vec3& other) const;
     bool operator!=(const Vec3& other) const;
 };
+
+extern Vec3 xAxis;
+extern Vec3 yAxis;
+extern Vec3 zAxis;
 
 struct Vec4 {
     float x = 0.0f, y = 0.0f, z = 0.0f, w = 0.0f;
@@ -58,6 +63,18 @@ struct Mat4 {
 
     static Mat4 translate(const Vec3& v);
     static Mat4 scale(const Vec3& v);
+};
+
+struct Aabb {
+    Vec3 min;
+    Vec3 max;
+
+    Vec3 center() const;
+    Vec3 extent() const;
+    Vec3 size() const;
+
+    bool contains(const Vec3& point) const;
+    bool overlaps(const Aabb& other) const;
 };
 
 namespace detail {
@@ -120,10 +137,7 @@ public:
 
 class ConvexPolyhedron : public ConvexShape {
 public:
-    ConvexPolyhedron(std::vector<Vec3> vertices)
-        : vertices_(std::move(vertices))
-    {
-    }
+    ConvexPolyhedron(std::vector<Vec3> vertices);
 
     Vec3 support(const Vec3& direction) const override;
 
@@ -133,10 +147,7 @@ private:
 
 class Sphere : public ConvexShape {
 public:
-    Sphere(float radius)
-        : radius_(radius)
-    {
-    }
+    Sphere(float radius);
 
     Vec3 support(const Vec3& direction) const override;
 
@@ -159,6 +170,7 @@ public:
     void setTransform(const Mat4& transform);
     void setTransform(const float* transformMatrix);
     Vec3 support(const Vec3& direction) const;
+    Aabb getAabb() const;
 
 private:
     struct ColliderShape {
@@ -172,6 +184,8 @@ private:
     std::vector<ColliderShape> shapes_;
     Mat4 transform_;
     Mat4 inverseTransform_;
+    mutable Aabb aabb_;
+    mutable bool aabbDirty_ = true;
 };
 
 namespace detail {

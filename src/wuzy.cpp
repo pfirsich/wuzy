@@ -46,6 +46,11 @@ Vec3 Vec3::operator-(const Vec3& other) const
     return Vec3 { x - other.x, y - other.y, z - other.z };
 }
 
+Vec3 Vec3::operator+(const Vec3& other) const
+{
+    return Vec3 { x + other.x, y + other.y, z + other.z };
+}
+
 Vec3 Vec3::operator*(float s) const
 {
     return Vec3 { s * x, s * y, s * z };
@@ -65,6 +70,10 @@ bool Vec3::operator!=(const Vec3& other) const
 {
     return !(*this == other);
 }
+
+Vec3 xAxis { 1.0f, 0.0f, 0.0f };
+Vec3 yAxis { 0.0f, 1.0f, 0.0f };
+Vec3 zAxis { 0.0f, 0.0f, 1.0f };
 
 Vec4::Vec4(float x, float y, float z, float w)
     : x(x)
@@ -149,6 +158,33 @@ Mat4 Mat4::scale(const Vec3& v)
     };
 }
 
+Vec3 Aabb::center() const
+{
+    return (min + max) * 0.5f;
+}
+
+Vec3 Aabb::extent() const
+{
+    return size() * 0.5f;
+}
+
+Vec3 Aabb::size() const
+{
+    return max - min;
+}
+
+bool Aabb::contains(const Vec3& p) const
+{
+    return p.x >= min.x && p.y >= min.y && p.z >= min.z && p.x <= max.x && p.y <= max.y
+        && p.z <= max.z;
+}
+
+bool Aabb::overlaps(const Aabb& b) const
+{
+    return min.x <= b.max.x && min.y <= b.max.y && min.z <= b.max.z && max.x >= b.min.x
+        && max.y >= b.min.y && max.z >= b.min.z;
+}
+
 namespace {
     Mat4 invertTrs(const Mat4& m)
     {
@@ -169,6 +205,12 @@ namespace {
         return Mat4::scale(Vec3 { 1.0f / sx, 1.0f / sy, 1.0f / sz }) * r.transpose()
             * Mat4::translate(-t);
     }
+}
+
+ConvexPolyhedron::ConvexPolyhedron(std::vector<Vec3> vertices)
+    : vertices_(std::move(vertices))
+{
+    assert(vertices_.size() > 0);
 }
 
 Vec3 ConvexPolyhedron::support(const Vec3& direction) const
@@ -192,6 +234,11 @@ Vec3 ConvexPolyhedron::support(const Vec3& direction) const
         }
     }
     return maxPoint;
+}
+
+Sphere::Sphere(float radius)
+    : radius_(radius)
+{
 }
 
 Vec3 Sphere::support(const Vec3& direction) const
@@ -220,6 +267,7 @@ void Collider::setTransform(const Mat4& transform)
         shape.fullTransform = transform_ * shape.transform;
         shape.inverseFullTransform = shape.inverseTransform * inverseTransform_;
     }
+    aabbDirty_ = true;
 }
 
 void Collider::setTransform(const float* transformMatrix)
@@ -243,6 +291,21 @@ Vec3 Collider::support(const Vec3& direction) const
         }
     }
     return maxPoint;
+}
+
+Aabb Collider::getAabb() const
+{
+    // http://allenchou.net/2014/02/game-physics-updating-aabbs-for-polyhedrons/
+    if (aabbDirty_) {
+        aabb_.min.x = support(-xAxis).x;
+        aabb_.min.y = support(-yAxis).y;
+        aabb_.min.z = support(-zAxis).z;
+        aabb_.max.x = support(xAxis).x;
+        aabb_.max.y = support(yAxis).y;
+        aabb_.max.z = support(zAxis).z;
+        aabbDirty_ = false;
+    }
+    return aabb_;
 }
 
 namespace {
@@ -532,6 +595,9 @@ namespace detail {
 
 bool testCollision(const Collider& c1, const Collider& c2)
 {
+    if (!c1.getAabb().overlaps(c2.getAabb())) {
+        return false;
+    }
     return gjk(c1, c2).has_value();
 }
 
@@ -710,6 +776,9 @@ namespace detail {
 
 std::optional<Collision> getCollision(const Collider& a, const Collider& b)
 {
+    if (!a.getAabb().overlaps(b.getAabb())) {
+        return std::nullopt;
+    }
     const auto gjkRes = gjk(a, b);
     if (!gjkRes) {
         return std::nullopt;

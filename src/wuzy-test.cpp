@@ -7,6 +7,7 @@
 #include <glwx/transform.hpp>
 #include <glwx/window.hpp>
 
+#include "debugdraw.hpp"
 #include "wuzy/wuzy.hpp"
 
 using namespace std::string_literals;
@@ -70,6 +71,11 @@ void drawMesh(const glwx::Mesh& mesh, const glm::vec4& color, const glw::Texture
     mesh.draw();
 }
 
+glm::vec3 vec3(const Vec3& v)
+{
+    return glm::vec3(v.x, v.y, v.z);
+}
+
 int main()
 {
     const auto window = glwx::makeWindow("Wuzy Test", 1920, 1080).value();
@@ -78,6 +84,8 @@ int main()
 #ifndef NDEBUG
     glwx::debug::init();
 #endif
+
+    DebugDraw debugDraw;
 
     glw::VertexFormat vertFmt;
     vertFmt.add(0, 3, glw::AttributeType::F32);
@@ -231,6 +239,7 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         const auto viewMatrix = glm::inverse(cameraTrafo.getMatrix());
+        debugDraw.setViewProjectionMatrix(projectionMatrix * viewMatrix);
 
         for (const auto& obstacle : obstacles) {
             const auto color
@@ -240,6 +249,8 @@ int main()
             } else if (obstacle.type == Obstacle::Type::Sphere) {
                 drawMesh(sphereMesh, color, texture, obstacle.trafo, viewMatrix, projectionMatrix);
             }
+            const auto aabb = obstacle.collider.getAabb();
+            debugDraw.aabb(glm::vec4(1.0f), vec3(aabb.min), vec3(aabb.max));
         }
 
         const auto color = playerCollision ? glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) : glm::vec4(1.0f);
