@@ -22,6 +22,8 @@ struct Vec3 {
     Vec3 operator-(const Vec3& other) const;
     Vec3 operator*(float s) const;
     Vec3 operator/(float s) const;
+    bool operator==(const Vec3& other) const;
+    bool operator!=(const Vec3& other) const;
 };
 
 struct Vec4 {

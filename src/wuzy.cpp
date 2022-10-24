@@ -53,6 +53,16 @@ Vec3 Vec3::operator/(float s) const
     return Vec3 { x / s, y / s, z / s };
 }
 
+bool Vec3::operator==(const Vec3& other) const
+{
+    return x == other.x && y == other.y && z == other.z;
+}
+
+bool Vec3::operator!=(const Vec3& other) const
+{
+    return !(*this == other);
+}
+
 Vec4::Vec4(float x, float y, float z, float w)
     : x(x)
     , y(y)
@@ -328,7 +338,16 @@ namespace {
             // ab.cross(ao) will give us a vector perpendicular to ab and ao. The second cross
             // product will give us a vector that is coplanar with ab and ao and perpendicular
             // to ab. This is roughly the vector from the line ab towards the origin.
-            return { simplex, ab.cross(ao).cross(ab), false };
+            auto dir = ab.cross(ao).cross(ab);
+            if (dir == Vec3 { 0.0f, 0.0f, 0.0f }) {
+                // This will happen if a, b and the origin are collinear!
+                // Pick any direction orthogonal to ab.
+                // https://box2d.org/posts/2014/02/computing-a-basis/
+                dir = ab.normalized();
+                dir = std::abs(dir.x) >= 0.57735f ? Vec3 { dir.y, -dir.x, 0.0f }
+                                                  : Vec3 { 0.0f, dir.z, -dir.y };
+            }
+            return { simplex, dir, false };
         } else {
             // <2>
             // If ao and ab are not in the same half-space, the origin is "after"/"beyond" a (<2>).
@@ -511,6 +530,8 @@ namespace {
         Vec3 direction = Vec3 { 1.0f, 0.0f, 0.0f };
 
         const auto a0 = support(c1, c2, direction);
+
+        // TODO: Handle a0 == origin
 
         Simplex3d simplex;
         simplex = { a0 };
