@@ -15,11 +15,34 @@ Something like this:
 https://docs.godotengine.org/en/stable/classes/class_kinematicbody.html
 
 # TODO:
-* Handle transforms for colliders and shapes
-* Implement getCollision using EPA
+* Fix EPA for deformed spheres (reaches max iterations sometimes and returns garbage)
 * Acceleration Structure (AABB Tree?)
+  http://allenchou.net/2014/02/game-physics-broadphase-dynamic-aabb-tree/
+  http://allenchou.net/2014/02/game-physics-updating-aabbs-for-polyhedrons/
+  https://box2d.org/files/ErinCatto_DynamicBVH_GDC2019.pdf
+  https://box2d.org/files/ErinCatto_DynamicBVH_Full.pdf
+* Collision Resolution
+  http://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
+* Ray Casting
 * Convex Decomposition
+  https://medium.com/@val.v.gorbunov/a-search-for-better-convex-decomposition-671ea647cec
+* Support Functions
+  - Boxes
+  - Capsules
 
-## Later
+## Maybe Later
+* Contact Points
+  https://box2d.org/files/ErinCatto_GJK_GDC2010.pdf
+* Calculate closest distance with GJK result (http://allenchou.net/2013/12/game-physics-collision-detection-gjk/ - "Extra" section)
 * Hill Climbing for Extreme Vertices (Real-Time Collision Detection)
+  http://allenchou.net/2014/02/game-physics-implementing-support-function-for-polyhedrons-using-half-edges/
 * Vertex Caching
+* Minkowski Portal Refinement
+
+## Resources
+* http://allenchou.net/2013/12/game-physics-collision-detection-gjk/
+* http://allenchou.net/2013/12/game-physics-contact-generation-epa/
+* https://github.com/kevinmoran/GJK
+* https://www.youtube.com/watch?v=Qupqu1xe7Io
+* https://blog.winter.dev/2020/gjk-algorithm/
+* https://www.youtube.com/watch?v=0XQ2FSz3EK8
