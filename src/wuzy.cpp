@@ -1,5 +1,6 @@
 #include "wuzy/wuzy.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstring>
@@ -7,6 +8,8 @@
 /* Sources:
  * https://www.youtube.com/watch?v=Qupqu1xe7Io
  */
+
+using namespace wuzy::detail;
 
 namespace wuzy {
 float Vec3::dot(const Vec3& other) const
@@ -248,50 +251,6 @@ namespace {
         return a.support(direction) - b.support(-direction);
     }
 
-    // This is not a full-blown StaticVector. Just what I need for the simplex.
-    template <typename T, size_t N>
-    class StaticVector {
-    public:
-        StaticVector() = default;
-        StaticVector(const StaticVector& other) = default;
-        StaticVector(StaticVector&& other) = default;
-        StaticVector& operator=(StaticVector&& other) = default;
-
-        StaticVector(std::initializer_list<T> init)
-        {
-            assert(init.size() <= N);
-            for (auto it = init.begin(); it != init.end(); ++it) {
-                elements_[std::distance(init.begin(), it)] = *it;
-            }
-            size_ = init.size();
-        }
-
-        void pushFront(T v)
-        {
-            // This actually just needs to go until size_, but with N being a compile-time constant
-            // it might be more likely the compiler unrolls this loop.
-            for (size_t i = N - 1; i > 0; --i) {
-                elements_[i] = elements_[i - 1];
-            }
-            elements_[0] = std::move(v);
-            size_ = std::min(size_ + 1, N);
-        }
-
-        const Vec3& operator[](size_t i) const
-        {
-            assert(i < size_);
-            return elements_[i];
-        }
-
-        size_t size() const { return size_; }
-
-    private:
-        std::array<T, N> elements_;
-        size_t size_ = 0;
-    };
-
-    using Simplex3d = StaticVector<Vec3, 4>;
-
     bool sameHalfSpace(const Vec3& a, const Vec3& b)
     {
         return a.dot(b) > 0.0f;
@@ -513,14 +472,10 @@ namespace {
         }
     }
 
+}
 
-    struct GjkResult {
-        size_t numIterations;
-        // Simplex that contains the origin, if there is a non-empty intersection
-        std::optional<Simplex3d> simplex;
-    };
-
-    GjkResult gjk(const Collider& c1, const Collider& c2)
+namespace detail {
+    std::optional<Simplex3d> gjk(const Collider& c1, const Collider& c2)
     {
         // As the initial direction we choose the x-axis. We want to bias the search towards the
         // origin/point of collision, so it would make sense to use the relative vector between the
@@ -547,35 +502,218 @@ namespace {
                 // We went towards the origin (direction points towards the origin) and the next
                 // supporting point we found was away from the origin instead. That means we did not
                 // "cross" the origin and there is no way to include the origin.
-                return { numIterations, std::nullopt };
+                return std::nullopt;
             }
 
             simplex.pushFront(a);
+            // std::cout << "after push (" << simplex.size() << "): " << toString(simplex) <<
+            // std::endl;
 
+            // std::cout << "before nextSimplex" << std::endl;
+            // std::cout << "simplex (" << simplex.size() << "): " << toString(simplex) <<
+            // std::endl; std::cout << "direction: " << toString(direction) << std::endl;
             auto res = nextSimplex(simplex, direction);
+            // std::cout << "after nextSimplex" << std::endl;
+            // std::cout << "containsOrigin: " << res.containsOrigin << std::endl;
+            // std::cout << "simplex (" << res.simplex.size() << "): " << toString(res.simplex)
+            // << std::endl;
+            // std::cout << "direction: " << toString(res.direction) << std::endl;
             if (res.containsOrigin) {
-                return { numIterations, res.simplex };
+                return res.simplex;
             }
             simplex = std::move(res.simplex);
             direction = res.direction;
         }
 
         // We only reach this if we exceed the maximum number of iterations
-        return { numIterations, std::nullopt };
+        return std::nullopt;
     }
 }
 
 bool testCollision(const Collider& c1, const Collider& c2)
 {
-    return gjk(c1, c2).simplex.has_value();
+    return gjk(c1, c2).has_value();
+}
+
+namespace {
+    void updateNormal(const std::vector<Vec3>& vertices, Triangle& face)
+    {
+        const auto& v0 = vertices[face.v0];
+        const auto& v1 = vertices[face.v1];
+        const auto& v2 = vertices[face.v2];
+
+        face.normal = (v1 - v0).cross(v2 - v0).normalized();
+        // The shortest path from the origin to the face is orthogonal to the plane (face), i.e.
+        // along the normal.
+        // Expressed in the base of the plane (normal + 2 tangent vectors) every point on the
+        // plane has the same coefficient for its normal component.
+        // Therefore we can determine the distance of the plane to the origin by
+        // |dot(normal, p)|, where p is any point on the plane. We choose v0.
+        // We also want to orient the normal correctly and since the polytope contains the
+        // origin and is convex, every normal has to point away from the origin.
+        // We can ensure this by making sure that the normals point in the same direction as any
+        // point on the plane (e.g. a vertex).
+        // So to make the normal point "outside" we have to make sure that normal.dot(-a) < 0.0f
+        // or normal.dot(a) > 0.0.
+        face.dist = face.normal.dot(v0);
+        if (face.dist < 0.0f) {
+            // Fix winding order of the triangle so that v0 -> v1 -> v2 is CCW
+            std::swap(face.v1, face.v2);
+            face.normal = -face.normal;
+            face.dist = -face.dist;
+        }
+    }
+
+    // Returns the index of the face closest to the origin and its distance.
+    std::pair<size_t, float> getClosestFace(const std::vector<Triangle>& faces)
+    {
+        float minDist = std::numeric_limits<float>::max();
+        size_t minFaceIdx = 0;
+        assert(faces.size() > 0);
+        for (size_t i = 0; i < faces.size(); ++i) {
+            assert(faces[i].normal != (Vec3 { 0.0f, 0.0f, 0.0f }));
+            assert(faces[i].dist >= 0.0f);
+            if (faces[i].dist < minDist) {
+                minDist = faces[i].dist;
+                minFaceIdx = i;
+            }
+        }
+        return { minFaceIdx, minDist };
+    }
+
+}
+
+namespace detail {
+    // Expanding Polytope Algorithm
+    Collision epa(const Collider& c1, const Collider& c2, const Simplex3d& simplex, EpaDebug* debug)
+    {
+        // Our variant of GJK always computes a tetrahedron before returning true.
+        // Other variants might not do that and would require extension of the simplex to at least 4
+        // vertices.
+        assert(simplex.size() == 4);
+
+        std::vector<Vec3> polytopeVertices(simplex.begin(), simplex.end());
+        std::vector<Triangle> polytopeFaces {
+            { 0, 1, 2 },
+            { 0, 2, 3 },
+            { 0, 3, 1 },
+            { 1, 3, 2 },
+        };
+
+        for (auto& face : polytopeFaces) {
+            updateNormal(polytopeVertices, face);
+        }
+
+        size_t minDistFaceIdx = 0;
+        float minFaceDist = 0.0f;
+
+        size_t numIterations = 0;
+        while (++numIterations < 32) {
+            std::tie(minDistFaceIdx, minFaceDist) = getClosestFace(polytopeFaces);
+
+            // Expand the polytope "outside" from the face closest to the origin.
+            const auto minDistFaceNormal = polytopeFaces[minDistFaceIdx].normal;
+            const auto supPoint = support(c1, c2, minDistFaceNormal);
+            const auto supDist = minDistFaceNormal.dot(supPoint);
+
+            if (debug) {
+                auto& it = debug->iterations.emplace_back();
+                it.polytopeVertices = polytopeVertices;
+                it.polytopeFaces = polytopeFaces;
+                it.minDistFaceIdx = minDistFaceIdx;
+                it.minFaceDist = minFaceDist;
+                it.supPoint = supPoint;
+                it.supDist = supDist;
+            }
+
+            // If we cannot expand the polytope (the new point is on the closest edge), the closest
+            // face is actually the closest face possible and we have reached the edge of the
+            // minkowski difference.
+            if (std::abs(supDist - minFaceDist) < 1e-4f) {
+                break;
+            }
+
+            using Edge = std::pair<size_t, size_t>;
+            std::vector<Edge> edgesToPatch;
+            // If the edge is part of multiple triangles, we DO NOT want to patch it, because it
+            // would create internal geometry, which will mess up everything.
+            // If the edge is part of multiple triangles, it will be one other adjacent triangle at
+            // most and the edge's direction will be reversed (if both triangles are CCW, which we
+            // made sure of in updateNormal).
+            auto addUniqueEdge = [&edgesToPatch](size_t first, size_t second) {
+                const auto reverseEdge
+                    = std::find(edgesToPatch.begin(), edgesToPatch.end(), Edge(second, first));
+                assert(std::find(edgesToPatch.begin(), edgesToPatch.end(), Edge(first, second))
+                    == edgesToPatch.end());
+                if (reverseEdge != edgesToPatch.end()) {
+                    *reverseEdge = edgesToPatch.back();
+                    edgesToPatch.pop_back();
+                } else {
+                    edgesToPatch.emplace_back(first, second);
+                }
+            };
+
+            if (debug) {
+                for (size_t i = 0; i < polytopeFaces.size(); ++i) {
+                    if (sameHalfSpace(polytopeFaces[i].normal,
+                            supPoint - polytopeVertices[polytopeFaces[i].v0])) {
+                        debug->iterations.back().removedFaces.push_back(i);
+                    }
+                }
+            }
+
+            // Remove all faces with a normal towards the new point
+            for (size_t i = 0; i < polytopeFaces.size();) {
+                // So many implementations check for dot(normal, supPoint) > 0 here, which is
+                // clearly wrong.
+                // Counter-example: Plane at (2,0) with normal (1,0) and new supporting point
+                // at (1,0) (or (1,5) or something for a more realistic scenario). In this case
+                // dot(normal, supPoint) would be > 0, but the point is clearly on the wrong side of
+                // the plane.
+                if (sameHalfSpace(polytopeFaces[i].normal,
+                        supPoint - polytopeVertices[polytopeFaces[i].v0])) {
+                    addUniqueEdge(polytopeFaces[i].v0, polytopeFaces[i].v1);
+                    addUniqueEdge(polytopeFaces[i].v1, polytopeFaces[i].v2);
+                    addUniqueEdge(polytopeFaces[i].v2, polytopeFaces[i].v0);
+
+                    // Move last element into place i to remove it.
+                    polytopeFaces[i] = polytopeFaces.back();
+                    polytopeFaces.pop_back();
+                } else {
+                    ++i;
+                }
+            }
+
+            if (debug) {
+                debug->iterations.back().edgesToPatch = edgesToPatch;
+            }
+
+            // Patch up the freshly cut edges (tasty!) with the new point
+            polytopeVertices.push_back(supPoint);
+            const auto supPointIdx = polytopeVertices.size() - 1;
+
+            for (const auto& [first, second] : edgesToPatch) {
+                polytopeFaces.push_back({ first, second, supPointIdx });
+                updateNormal(polytopeVertices, polytopeFaces.back());
+            }
+        }
+
+        // TODO: Project the origin into the closest face to approximate contact points
+
+        return {
+            polytopeFaces[minDistFaceIdx].normal,
+            // Add some epsilon to make sure we resolve the collision
+            minFaceDist + 1e-4f,
+        };
+    }
 }
 
 std::optional<Collision> getCollision(const Collider& a, const Collider& b)
 {
     const auto gjkRes = gjk(a, b);
-    if (!gjkRes.simplex) {
+    if (!gjkRes) {
         return std::nullopt;
     }
-    return Collision {};
+    return epa(a, b, *gjkRes);
 }
 }

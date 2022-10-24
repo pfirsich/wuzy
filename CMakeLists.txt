@@ -26,4 +26,8 @@ add_subdirectory(deps/glwrap)
 
 add_executable(wuzy-test "src/wuzy-test.cpp")
 target_link_libraries(wuzy-test wuzy)
-target_link_libraries(wuzy glwx)
+target_link_libraries(wuzy-test glwx)
+
+add_executable(wuzy-epa-debug "src/wuzy-epa-debug.cpp")
+target_link_libraries(wuzy-epa-debug wuzy)
+target_link_libraries(wuzy-epa-debug glwx)

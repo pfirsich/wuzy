@@ -47,8 +47,7 @@ const auto frag = R"(
 )"s;
 
 void drawMesh(const glwx::Mesh& mesh, const glm::vec4& color, const glw::Texture& texture,
-    const glwx::Transform& trafo, const glm::mat4& projectionMatrix,
-    const glwx::Transform& cameraTrafo)
+    const glwx::Transform& trafo, const glm::mat4& viewMatrix, const glm::mat4& projectionMatrix)
 {
     static const auto prog
         = glwx::makeShaderProgram(std::string_view(vert), std::string_view(frag)).value();
@@ -56,9 +55,6 @@ void drawMesh(const glwx::Mesh& mesh, const glm::vec4& color, const glw::Texture
     texture.bind(0);
 
     const auto modelMatrix = trafo.getMatrix();
-    auto viewMatrix = cameraTrafo.getMatrix();
-    viewMatrix
-        = glm::lookAt(glm::vec3(0.0f, 20.0f, 1.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     const auto modelViewMatrix = viewMatrix * modelMatrix;
     const auto normalMatrix = glm::mat3(glm::transpose(glm::inverse(modelViewMatrix)));
 
@@ -76,7 +72,7 @@ void drawMesh(const glwx::Mesh& mesh, const glm::vec4& color, const glw::Texture
 
 int main()
 {
-    const auto window = glwx::makeWindow("Wuzy Test", 1024, 768).value();
+    const auto window = glwx::makeWindow("Wuzy Test", 1920, 1080).value();
     glw::State::instance().setViewport(window.getSize().x, window.getSize().y);
 
 #ifndef NDEBUG
@@ -87,6 +83,8 @@ int main()
     vertFmt.add(0, 3, glw::AttributeType::F32);
     vertFmt.add(1, 2, glw::AttributeType::U16, true);
     vertFmt.add(2, 4, glw::AttributeType::IW2Z10Y10X10, true);
+
+    const auto texture = glwx::makeTexture2D(glm::vec4(1.0f));
 
     const auto boxSize = 1.0f;
     const auto hBoxSize = boxSize / 2.0f;
@@ -103,44 +101,63 @@ int main()
         Vec3 { -hBoxSize, hBoxSize, hBoxSize },
     };
 
-    const auto sphereRadius = 0.5f;
-    auto sphereMesh = glwx::makeSphereMesh(vertFmt, { 0, 1, 2 }, sphereRadius, 32, 32);
-
     struct Obstacle {
+        enum class Type { Box, Sphere };
+
         glwx::Transform trafo;
         Collider collider;
+        Type type;
         bool collision = false;
     };
 
     auto randf = []() { return (rand() % 10000) / 10000.0f; };
+    auto lerp = [](float t, float a, float b) { return a + (b - a) * t; };
+    auto randfRange = [randf, lerp](float min, float max) { return lerp(randf(), min, max); };
+    srand(42);
 
     std::vector<Obstacle> obstacles;
     const auto range = 8;
-    for (size_t i = 0; i < 8; ++i) {
-        const auto x = i == 0 ? 0.0f : randf() * range * 2.0f - range;
+    for (size_t i = 0; i < 10; ++i) {
+        const auto x = i == 0 ? hBoxSize * 2.0f + 0.1f : randf() * range * 2.0f - range;
         const auto z = i == 0 ? 0.0f : randf() * range * 2.0f - range;
         auto trafo = glwx::Transform(glm::vec3(x, 0.0f, z));
+        /*trafo.setScale(
+            glm::vec3(randfRange(0.5f, 1.5f), randfRange(0.5f, 1.5f), randfRange(0.5f, 1.5f)));
+        trafo.setOrientation(
+            glm::angleAxis(randf() * glm::two_pi<float>(), glm::vec3(1.0f, 0.0f, 0.0f))
+            * glm::angleAxis(randf() * glm::two_pi<float>(), glm::vec3(0.0f, 1.0f, 0.0f))
+            * glm::angleAxis(randf() * glm::two_pi<float>(), glm::vec3(0.0f, 0.0f, 1.0f)));*/
+        const auto type = rand() % 2 == 0 ? Obstacle::Type::Box : Obstacle::Type::Sphere;
         Collider collider;
-        collider.addShape<ConvexPolyhedron>(Mat4 {}, boxVertices);
-        // collider.addShape<Sphere>(Mat4 {}, hBoxSize);
+        if (type == Obstacle::Type::Box) {
+            collider.addShape<ConvexPolyhedron>(Mat4 {}, boxVertices);
+        } else if (type == Obstacle::Type::Sphere) {
+            collider.addShape<Sphere>(Mat4 {}, hBoxSize);
+        }
         collider.setTransform(glm::value_ptr(trafo.getMatrix()));
-        obstacles.push_back(Obstacle { std::move(trafo), std::move(collider) });
+        obstacles.push_back(Obstacle { std::move(trafo), std::move(collider), type });
     }
 
     glwx::Transform playerTrafo;
     Collider playerCollider;
     bool playerCollision = false;
-    playerCollider.addShape<Sphere>(Mat4 {}, sphereRadius);
+    const auto playerRadius = 0.5f;
+    auto sphereMesh = glwx::makeSphereMesh(vertFmt, { 0, 1, 2 }, playerRadius, 32, 32);
+    playerCollider.addShape<Sphere>(Mat4 {}, playerRadius);
 
-    const auto plainTexture = glwx::makeTexture2D(glm::vec4(1.0f));
-    const auto checkerTexture = glwx::makeTexture2D(256, 256, 16);
-
+    float cameraPitch = 0.0f, cameraYaw = 0.0f;
     glwx::Transform cameraTrafo;
+    cameraTrafo.setPosition(glm::vec3(0.0f, 20.0f, 15.0f));
+    cameraTrafo.lookAt(glm::vec3(0.0f));
+    SDL_SetRelativeMouseMode(SDL_TRUE);
 
     const auto aspect = static_cast<float>(window.getSize().x) / window.getSize().y;
     glm::mat4 projectionMatrix = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
 
     glEnable(GL_DEPTH_TEST);
+
+    enum class InputMode { Player, Camera };
+    InputMode inputMode = InputMode::Player;
 
     SDL_Event event;
     bool running = true;
@@ -156,6 +173,15 @@ int main()
                 case SDLK_ESCAPE:
                     running = false;
                     break;
+                case SDLK_SPACE:
+                    if (inputMode == InputMode::Player) {
+                        inputMode = InputMode::Camera;
+                        std::cout << "Input Mode: Camera\n";
+                    } else if (inputMode == InputMode::Camera) {
+                        inputMode = InputMode::Player;
+                        std::cout << "Input Mode: Player\n";
+                    }
+                    break;
                 }
             }
         }
@@ -164,32 +190,60 @@ int main()
         const auto dt = now - time;
         time = now;
 
+        int mouseX = 0, mouseY = 0;
+        SDL_GetRelativeMouseState(&mouseX, &mouseY);
+
         const auto kbState = SDL_GetKeyboardState(nullptr);
         const auto moveX = kbState[SDL_SCANCODE_D] - kbState[SDL_SCANCODE_A];
+        const auto moveY = kbState[SDL_SCANCODE_R] - kbState[SDL_SCANCODE_F];
         const auto moveZ = kbState[SDL_SCANCODE_S] - kbState[SDL_SCANCODE_W];
-        const auto move = glm::vec3(moveX, 0.0f, moveZ);
-        if (move.x != 0.0f || move.z != 0.0f) {
-            playerTrafo.move(move * 2.0f * dt);
+        const auto move = glm::vec3(moveX, moveY, moveZ);
+        const auto vel = move * 2.0f * dt;
+
+        if (inputMode == InputMode::Player && glm::length(move) > 0.0f) {
+            playerTrafo.move(vel);
             playerCollider.setTransform(glm::value_ptr(playerTrafo.getMatrix()));
 
             playerCollision = false;
             for (auto& obstacle : obstacles) {
-                obstacle.collision = testCollision(playerCollider, obstacle.collider);
-                playerCollision = playerCollision || obstacle.collision;
+                const auto col = getCollision(playerCollider, obstacle.collider);
+                obstacle.collision = col.has_value();
+                if (col) {
+                    const auto mtv = -glm::vec3(col->normal.x, col->normal.y, col->normal.z)
+                        * col->penetrationDepth * 1.0f;
+                    playerTrafo.move(mtv);
+                    playerCollider.setTransform(glm::value_ptr(playerTrafo.getMatrix()));
+                    playerCollision = true;
+                }
             }
+        } else if (inputMode == InputMode::Camera) {
+            cameraTrafo.moveLocal(vel);
+            const auto look = glm::vec2(mouseX, mouseY) * 0.002f;
+            cameraPitch
+                = std::clamp(cameraPitch - look.y, -glm::half_pi<float>(), glm::half_pi<float>());
+            cameraYaw += -look.x;
+            const auto pitchQuat = glm::angleAxis(cameraPitch, glm::vec3(1.0f, 0.0f, 0.0f));
+            const auto yawQuat = glm::angleAxis(cameraYaw, glm::vec3(0.0f, 1.0f, 0.0f));
+            cameraTrafo.setOrientation(yawQuat * pitchQuat);
         }
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        const auto viewMatrix = glm::inverse(cameraTrafo.getMatrix());
+
         for (const auto& obstacle : obstacles) {
-            drawMesh(boxMesh,
-                obstacle.collision ? glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) : glm::vec4(1.0f),
-                plainTexture, obstacle.trafo, projectionMatrix, cameraTrafo);
+            const auto color
+                = obstacle.collision ? glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) : glm::vec4(1.0f);
+            if (obstacle.type == Obstacle::Type::Box) {
+                drawMesh(boxMesh, color, texture, obstacle.trafo, viewMatrix, projectionMatrix);
+            } else if (obstacle.type == Obstacle::Type::Sphere) {
+                drawMesh(sphereMesh, color, texture, obstacle.trafo, viewMatrix, projectionMatrix);
+            }
         }
 
-        drawMesh(sphereMesh, playerCollision ? glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) : glm::vec4(1.0f),
-            plainTexture, playerTrafo, projectionMatrix, cameraTrafo);
+        const auto color = playerCollision ? glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) : glm::vec4(1.0f);
+        drawMesh(sphereMesh, color, texture, playerTrafo, viewMatrix, projectionMatrix);
 
         window.swap();
     }

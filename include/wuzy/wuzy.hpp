@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cassert>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -58,6 +59,55 @@ struct Mat4 {
     static Mat4 translate(const Vec3& v);
     static Mat4 scale(const Vec3& v);
 };
+
+namespace detail {
+    // This is not a full-blown StaticVector. Just what I need for the simplex.
+    template <typename T, size_t N>
+    class StaticVector {
+    public:
+        StaticVector() = default;
+        StaticVector(const StaticVector& other) = default;
+        StaticVector(StaticVector&& other) = default;
+        StaticVector& operator=(StaticVector&& other) = default;
+
+        StaticVector(std::initializer_list<T> init)
+        {
+            assert(init.size() <= N);
+            for (auto it = init.begin(); it != init.end(); ++it) {
+                elements_[std::distance(init.begin(), it)] = *it;
+            }
+            size_ = init.size();
+        }
+
+        void pushFront(T v)
+        {
+            // This actually just needs to go until size_, but with N being a compile-time constant
+            // it might be more likely the compiler unrolls this loop.
+            for (size_t i = N - 1; i > 0; --i) {
+                elements_[i] = elements_[i - 1];
+            }
+            elements_[0] = std::move(v);
+            size_ = std::min(size_ + 1, N);
+        }
+
+        const Vec3& operator[](size_t i) const
+        {
+            assert(i < size_);
+            return elements_[i];
+        }
+
+        size_t size() const { return size_; }
+
+        auto begin() const { return elements_.begin(); }
+        auto end() const { return elements_.begin() + size_; }
+
+    private:
+        std::array<T, N> elements_;
+        size_t size_ = 0;
+    };
+
+    using Simplex3d = StaticVector<Vec3, 4>;
+}
 
 class ConvexShape {
 public:
@@ -124,11 +174,47 @@ private:
     Mat4 inverseTransform_;
 };
 
+namespace detail {
+    // Returns simplex that contains the origin, if there is a non-empty intersection
+    std::optional<Simplex3d> gjk(const Collider& c1, const Collider& c2);
+}
+
+bool testCollision(const Collider& a, const Collider& b);
+
 struct Collision {
-    Vec3 collisionNormal;
+    // This is the normal for the first collider.
+    // To resolve the collision you have to move by -normal * penetrationDepth
+    Vec3 normal;
     float penetrationDepth;
 };
 
-bool testCollision(const Collider& a, const Collider& b);
+namespace detail {
+    struct Triangle {
+        size_t v0;
+        size_t v1;
+        size_t v2;
+        Vec3 normal = {};
+        float dist = 0.0f; // Distance to origin
+    };
+
+    struct EpaDebug {
+        struct Iteration {
+            std::vector<Vec3> polytopeVertices;
+            std::vector<Triangle> polytopeFaces;
+            size_t minDistFaceIdx;
+            float minFaceDist;
+            Vec3 supPoint;
+            float supDist;
+            std::vector<size_t> removedFaces;
+            std::vector<std::pair<size_t, size_t>> edgesToPatch;
+        };
+
+        std::vector<Iteration> iterations;
+    };
+
+    Collision epa(const Collider& c1, const Collider& c2, const Simplex3d& simplex,
+        EpaDebug* debug = nullptr);
+}
+
 std::optional<Collision> getCollision(const Collider& a, const Collider& b);
 }
