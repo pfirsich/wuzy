@@ -3,8 +3,10 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
+#include <queue>
 #include <vector>
 
 namespace wuzy {
@@ -72,9 +74,13 @@ struct Aabb {
     Vec3 center() const;
     Vec3 extent() const;
     Vec3 size() const;
+    float area() const;
+    float volume() const;
 
     bool contains(const Vec3& point) const;
     bool overlaps(const Aabb& other) const;
+
+    Aabb combine(const Aabb& other) const; // `union` is a keyword
 };
 
 namespace detail {
@@ -157,6 +163,8 @@ private:
 
 struct Collider {
 public:
+    void* userData = nullptr;
+
     Collider() = default;
 
     void addShape(std::unique_ptr<ConvexShape> shape, Mat4 transform);
@@ -231,4 +239,54 @@ namespace detail {
 }
 
 std::optional<Collision> getCollision(const Collider& a, const Collider& b);
+
+class AabbTree {
+public:
+    size_t insert(Collider* collider);
+    void remove(Collider* collider);
+    void removeNode(size_t nodeIdx);
+    void update(Collider* collider);
+    void updateNode(size_t nodeIdx);
+
+    // TODO: Add a custom class for this with begin() and end()
+    using ColliderList = std::vector<Collider*>;
+
+    ColliderList query(const Vec3& point) const;
+    ColliderList query(const Aabb& aabb) const;
+
+    using ColliderPairList = std::vector<std::pair<Collider*, Collider*>>;
+    ColliderPairList getNeighbours() const;
+
+    // RayCastResult rayCast(const Ray& ray) const;
+
+    // Returns vector of AABB + depth
+    std::vector<std::pair<Aabb, uint32_t>> getAabbs() const;
+
+private:
+    static constexpr size_t InvalidIdx = std::numeric_limits<size_t>::max();
+
+    struct Node {
+        Aabb aabb;
+
+        size_t parentIdx = InvalidIdx;
+        size_t leftIdx = InvalidIdx;
+        size_t rightIdx = InvalidIdx;
+
+        Collider* collider = nullptr;
+
+        bool isLeaf() const;
+
+        void replaceChild(size_t oldChildIdx, size_t newChildIdx);
+    };
+
+    size_t getNewNode();
+    void updateAabb(size_t nodeIdx);
+    size_t findNode(Collider* collider) const;
+    void insertIntoTree(size_t nodeIdx, size_t parentIdx);
+    void removeFromTree(size_t nodeIdx);
+
+    std::vector<Node> nodes_;
+    size_t rootIdx_ = InvalidIdx;
+    std::queue<size_t> nodeFreeList_;
+};
 }

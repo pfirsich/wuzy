@@ -173,6 +173,18 @@ Vec3 Aabb::size() const
     return max - min;
 }
 
+float Aabb::area() const
+{
+    const auto s = size();
+    return 2.0f * (s.x * s.y + s.x * s.z + s.x * s.z);
+}
+
+float Aabb::volume() const
+{
+    const auto s = size();
+    return s.x * s.y * s.z;
+}
+
 bool Aabb::contains(const Vec3& p) const
 {
     return p.x >= min.x && p.y >= min.y && p.z >= min.z && p.x <= max.x && p.y <= max.y
@@ -183,6 +195,22 @@ bool Aabb::overlaps(const Aabb& b) const
 {
     return min.x <= b.max.x && min.y <= b.max.y && min.z <= b.max.z && max.x >= b.min.x
         && max.y >= b.min.y && max.z >= b.min.z;
+}
+
+Aabb Aabb::combine(const Aabb& other) const
+{
+    return Aabb {
+        Vec3 {
+            std::min(min.x, other.min.x),
+            std::min(min.y, other.min.y),
+            std::min(min.z, other.min.z),
+        },
+        Vec3 {
+            std::max(max.x, other.max.x),
+            std::max(max.y, other.max.y),
+            std::max(max.z, other.max.z),
+        },
+    };
 }
 
 namespace {
@@ -784,5 +812,235 @@ std::optional<Collision> getCollision(const Collider& a, const Collider& b)
         return std::nullopt;
     }
     return epa(a, b, *gjkRes);
+}
+
+size_t AabbTree::insert(Collider* collider)
+{
+    const auto idx = getNewNode();
+    nodes_[idx].collider = collider;
+    updateAabb(idx);
+    insertIntoTree(idx, rootIdx_);
+    return idx;
+}
+
+void AabbTree::remove(Collider* collider)
+{
+    const auto idx = findNode(collider);
+    assert(idx != InvalidIdx);
+    removeNode(idx);
+}
+
+void AabbTree::removeNode(size_t nodeIdx)
+{
+    removeFromTree(nodeIdx);
+
+    nodes_[nodeIdx].parentIdx = InvalidIdx;
+    nodes_[nodeIdx].leftIdx = InvalidIdx;
+    nodes_[nodeIdx].rightIdx = InvalidIdx;
+    nodes_[nodeIdx].collider = nullptr;
+    nodeFreeList_.push(nodeIdx);
+}
+
+void AabbTree::update(Collider* collider)
+{
+    const auto idx = findNode(collider);
+    assert(idx != InvalidIdx);
+    updateNode(idx);
+}
+
+void AabbTree::updateNode(size_t nodeIdx)
+{
+    assert(nodeIdx < nodes_.size());
+    removeFromTree(nodeIdx);
+    updateAabb(nodeIdx);
+    insertIntoTree(nodeIdx, rootIdx_);
+}
+
+AabbTree::ColliderList AabbTree::query(const Vec3& point) const
+{
+    std::queue<size_t> q;
+    std::vector<Collider*> colliders;
+    if (rootIdx_ != InvalidIdx) {
+        q.push(rootIdx_);
+    }
+    while (q.size()) {
+        const auto& node = nodes_[q.front()];
+        q.pop();
+
+        if (node.aabb.contains(point)) {
+            if (node.isLeaf()) {
+                colliders.push_back(node.collider);
+            } else {
+                q.push(node.leftIdx);
+                q.push(node.rightIdx);
+            }
+        }
+    }
+    return colliders;
+}
+
+AabbTree::ColliderList AabbTree::query(const Aabb& aabb) const
+{
+    std::queue<size_t> q;
+    std::vector<Collider*> colliders;
+    if (rootIdx_ != InvalidIdx) {
+        q.push(rootIdx_);
+    }
+    while (q.size()) {
+        const auto& node = nodes_[q.front()];
+        q.pop();
+
+        if (node.aabb.overlaps(aabb)) {
+            if (node.isLeaf()) {
+                colliders.push_back(node.collider);
+            } else {
+                q.push(node.leftIdx);
+                q.push(node.rightIdx);
+            }
+        }
+    }
+    return colliders;
+}
+
+AabbTree::ColliderPairList AabbTree::getNeighbours() const
+{
+    return {};
+}
+
+std::vector<std::pair<Aabb, uint32_t>> AabbTree::getAabbs() const
+{
+    std::vector<std::pair<Aabb, uint32_t>> aabbs;
+    std::queue<std::pair<size_t, uint32_t>> q;
+    q.push({ rootIdx_, 0ul });
+    while (q.size()) {
+        const auto [nodeIdx, depth] = q.front();
+        q.pop();
+
+        aabbs.push_back({ nodes_[nodeIdx].aabb, depth });
+        if (!nodes_[nodeIdx].isLeaf()) {
+            q.push({ nodes_[nodeIdx].leftIdx, depth + 1 });
+            q.push({ nodes_[nodeIdx].rightIdx, depth + 1 });
+        }
+    }
+    return aabbs;
+}
+
+bool AabbTree::Node::isLeaf() const
+{
+    return collider != nullptr;
+}
+
+void AabbTree::Node::replaceChild(size_t oldChildIdx, size_t newChildIdx)
+{
+    assert(leftIdx == oldChildIdx || rightIdx == oldChildIdx);
+    if (leftIdx == oldChildIdx) {
+        leftIdx = newChildIdx;
+    } else {
+        rightIdx = newChildIdx;
+    }
+}
+
+size_t AabbTree::getNewNode()
+{
+    if (!nodeFreeList_.empty()) {
+        const auto idx = nodeFreeList_.front();
+        nodeFreeList_.pop();
+        return idx;
+    }
+
+    nodes_.emplace_back();
+    return nodes_.size() - 1;
+}
+
+void AabbTree::updateAabb(size_t nodeIdx)
+{
+    auto& node = nodes_[nodeIdx];
+    if (node.collider) {
+        node.aabb = node.collider->getAabb();
+    } else {
+        assert(node.leftIdx != InvalidIdx && node.rightIdx != InvalidIdx);
+        const auto& left = nodes_[node.leftIdx];
+        const auto& right = nodes_[node.rightIdx];
+        node.aabb = left.aabb.combine(right.aabb);
+    }
+}
+
+size_t AabbTree::findNode(Collider* collider) const
+{
+    assert(collider != nullptr);
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+        if (nodes_[i].collider == collider) {
+            return i;
+        }
+    }
+    return InvalidIdx;
+}
+
+void AabbTree::insertIntoTree(size_t nodeIdx, size_t parentIdx)
+{
+    // http://allenchou.net/2014/02/game-physics-broadphase-dynamic-aabb-tree/
+    // https://box2d.org/files/ErinCatto_DynamicBVH_Full.pdf
+    if (rootIdx_ == InvalidIdx) {
+        rootIdx_ = nodeIdx;
+        return;
+    }
+
+    if (nodes_[parentIdx].isLeaf()) {
+        const auto newParentIdx = getNewNode();
+        nodes_[newParentIdx].leftIdx = nodeIdx;
+        nodes_[newParentIdx].rightIdx = parentIdx;
+
+        const auto oldParentIdx = nodes_[parentIdx].parentIdx;
+        if (oldParentIdx == InvalidIdx) {
+            assert(parentIdx == rootIdx_);
+            rootIdx_ = newParentIdx;
+        } else {
+            nodes_[oldParentIdx].replaceChild(parentIdx, newParentIdx);
+            nodes_[newParentIdx].parentIdx = oldParentIdx;
+        }
+
+        nodes_[nodeIdx].parentIdx = newParentIdx;
+        nodes_[parentIdx].parentIdx = newParentIdx;
+
+        updateAabb(newParentIdx);
+    } else {
+        assert(nodes_[parentIdx].leftIdx != InvalidIdx && nodes_[parentIdx].rightIdx != InvalidIdx);
+        const auto& leftAabb = nodes_[nodes_[parentIdx].leftIdx].aabb;
+        const auto& rightAabb = nodes_[nodes_[parentIdx].rightIdx].aabb;
+        const auto leftVolDiff
+            = leftAabb.combine(nodes_[nodeIdx].aabb).volume() - leftAabb.volume();
+        const auto rightVolDiff
+            = rightAabb.combine(nodes_[nodeIdx].aabb).volume() - rightAabb.volume();
+        if (leftVolDiff <= rightVolDiff) {
+            insertIntoTree(nodeIdx, nodes_[parentIdx].leftIdx);
+        } else {
+            insertIntoTree(nodeIdx, nodes_[parentIdx].rightIdx);
+        }
+        updateAabb(parentIdx);
+    }
+}
+
+void AabbTree::removeFromTree(size_t nodeIdx)
+{
+    assert(nodeIdx < nodes_.size());
+
+    const auto parentIdx = nodes_[nodeIdx].parentIdx;
+    if (parentIdx == InvalidIdx) {
+        assert(nodeIdx == rootIdx_);
+        rootIdx_ = InvalidIdx;
+    } else {
+        assert(nodes_[parentIdx].leftIdx == nodeIdx || nodes_[parentIdx].rightIdx == nodeIdx);
+        const auto siblingIdx = nodes_[parentIdx].rightIdx == nodeIdx ? nodes_[parentIdx].leftIdx
+                                                                      : nodes_[parentIdx].rightIdx;
+        if (parentIdx == rootIdx_) {
+            rootIdx_ = siblingIdx;
+            nodes_[siblingIdx].parentIdx = InvalidIdx;
+        } else {
+            const auto grandparentIdx = nodes_[parentIdx].parentIdx;
+            assert(grandparentIdx != InvalidIdx);
+            nodes_[siblingIdx].parentIdx = grandparentIdx;
+            nodes_[grandparentIdx].replaceChild(parentIdx, siblingIdx);
+        }
+    }
 }
 }

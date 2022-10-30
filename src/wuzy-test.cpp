@@ -94,6 +94,8 @@ int main()
 
     const auto texture = glwx::makeTexture2D(glm::vec4(1.0f));
 
+    AabbTree broadphase;
+
     const auto boxSize = 1.0f;
     const auto hBoxSize = boxSize / 2.0f;
     auto boxMesh = glwx::makeBoxMesh(vertFmt, { 0, 1, 2 }, boxSize, boxSize, boxSize);
@@ -113,8 +115,9 @@ int main()
         enum class Type { Box, Sphere };
 
         glwx::Transform trafo;
-        Collider collider;
+        std::unique_ptr<Collider> collider; // need stable pointers for broadphase
         Type type;
+        bool candidate = false;
         bool collision = false;
     };
 
@@ -136,13 +139,15 @@ int main()
             * glm::angleAxis(randf() * glm::two_pi<float>(), glm::vec3(0.0f, 1.0f, 0.0f))
             * glm::angleAxis(randf() * glm::two_pi<float>(), glm::vec3(0.0f, 0.0f, 1.0f)));*/
         const auto type = rand() % 2 == 0 ? Obstacle::Type::Box : Obstacle::Type::Sphere;
-        Collider collider;
+        auto collider = std::make_unique<Collider>();
+        collider->userData = reinterpret_cast<void*>(obstacles.size());
         if (type == Obstacle::Type::Box) {
-            collider.addShape<ConvexPolyhedron>(Mat4 {}, boxVertices);
+            collider->addShape<ConvexPolyhedron>(Mat4 {}, boxVertices);
         } else if (type == Obstacle::Type::Sphere) {
-            collider.addShape<Sphere>(Mat4 {}, hBoxSize);
+            collider->addShape<Sphere>(Mat4 {}, hBoxSize);
         }
-        collider.setTransform(glm::value_ptr(trafo.getMatrix()));
+        collider->setTransform(glm::value_ptr(trafo.getMatrix()));
+        broadphase.insert(collider.get());
         obstacles.push_back(Obstacle { std::move(trafo), std::move(collider), type });
     }
 
@@ -152,6 +157,7 @@ int main()
     const auto playerRadius = 0.5f;
     auto sphereMesh = glwx::makeSphereMesh(vertFmt, { 0, 1, 2 }, playerRadius, 32, 32);
     playerCollider.addShape<Sphere>(Mat4 {}, playerRadius);
+    broadphase.insert(&playerCollider);
 
     float cameraPitch = 0.0f, cameraYaw = 0.0f;
     glwx::Transform cameraTrafo;
@@ -209,14 +215,29 @@ int main()
         const auto vel = move * 2.0f * dt;
 
         if (inputMode == InputMode::Player && glm::length(move) > 0.0f) {
+            playerCollision = false;
+            for (auto& obstacle : obstacles) {
+                obstacle.candidate = false;
+                obstacle.collision = false;
+            }
+
             playerTrafo.move(vel);
             playerCollider.setTransform(glm::value_ptr(playerTrafo.getMatrix()));
 
-            playerCollision = false;
-            for (auto& obstacle : obstacles) {
-                const auto col = getCollision(playerCollider, obstacle.collider);
-                obstacle.collision = col.has_value();
-                if (col) {
+            // This is kind of racey, because the broadphase query depends on the transform of the
+            // player collider, which is changed in the loop.
+            // In a real game, you would do this totally differently (many possible ways)!
+            broadphase.update(&playerCollider);
+            for (auto collider : broadphase.query(playerCollider.getAabb())) {
+                if (collider == &playerCollider) {
+                    continue;
+                }
+                const auto obstacleIdx = reinterpret_cast<size_t>(collider->userData);
+                auto& obstacle = obstacles[obstacleIdx];
+                assert(obstacle.collider.get() == collider);
+                obstacle.candidate = true;
+                if (const auto col = getCollision(playerCollider, *obstacle.collider)) {
+                    obstacle.collision = true;
                     const auto mtv = -glm::vec3(col->normal.x, col->normal.y, col->normal.z)
                         * col->penetrationDepth * 1.0f;
                     playerTrafo.move(mtv);
@@ -242,19 +263,40 @@ int main()
         debugDraw.setViewProjectionMatrix(projectionMatrix * viewMatrix);
 
         for (const auto& obstacle : obstacles) {
-            const auto color
-                = obstacle.collision ? glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) : glm::vec4(1.0f);
+            const auto color = [&obstacle]() {
+                if (obstacle.collision) {
+                    return glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+                } else if (obstacle.candidate) {
+                    return glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+                } else {
+                    return glm::vec4(1.0f);
+                }
+            }();
             if (obstacle.type == Obstacle::Type::Box) {
                 drawMesh(boxMesh, color, texture, obstacle.trafo, viewMatrix, projectionMatrix);
             } else if (obstacle.type == Obstacle::Type::Sphere) {
                 drawMesh(sphereMesh, color, texture, obstacle.trafo, viewMatrix, projectionMatrix);
             }
-            const auto aabb = obstacle.collider.getAabb();
+            const auto aabb = obstacle.collider->getAabb();
             debugDraw.aabb(glm::vec4(1.0f), vec3(aabb.min), vec3(aabb.max));
         }
 
         const auto color = playerCollision ? glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) : glm::vec4(1.0f);
         drawMesh(sphereMesh, color, texture, playerTrafo, viewMatrix, projectionMatrix);
+
+        std::vector<glm::vec4> aabbColors {
+            glm::vec4(1.0f, 0.0f, 0.0f, 1.0f),
+            glm::vec4(0.0f, 1.0f, 0.0f, 1.0f),
+            glm::vec4(0.0f, 0.0f, 1.0f, 1.0f),
+            glm::vec4(1.0f, 1.0f, 0.0f, 1.0f),
+            glm::vec4(1.0f, 0.0f, 1.0f, 1.0f),
+            glm::vec4(0.0f, 1.0f, 1.0f, 1.0f),
+            glm::vec4(1.0f, 1.0f, 1.0f, 1.0f),
+        };
+        for (const auto& [aabb, depth] : broadphase.getAabbs()) {
+            const auto& color = aabbColors[depth % aabbColors.size()];
+            debugDraw.aabb(color, vec3(aabb.min), vec3(aabb.max));
+        }
 
         window.swap();
     }
