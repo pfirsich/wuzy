@@ -15,20 +15,19 @@ Something like this:
 https://docs.godotengine.org/en/stable/classes/class_kinematicbody.html
 
 # TODO:
-* Fix EPA for deformed spheres (reaches max iterations sometimes and returns garbage)
-* Acceleration Structure (AABB Tree?)
-  http://allenchou.net/2014/02/game-physics-broadphase-dynamic-aabb-tree/
-  http://allenchou.net/2014/02/game-physics-updating-aabbs-for-polyhedrons/
-  https://box2d.org/files/ErinCatto_DynamicBVH_GDC2019.pdf
-  https://box2d.org/files/ErinCatto_DynamicBVH_Full.pdf
-* Collision Resolution
-  http://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
+* Find and fix all GJK edge cases and consider completely different implementations
+* Fix EPA edge cases (e.g. deformed spheres (reaches max iterations sometimes and returns garbage))
 * Ray Casting
+* Be smarter about AabbTree::update (smarter than remove and re-insert)
+* Better Collision Resolution
+  http://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
 * Convex Decomposition
   https://medium.com/@val.v.gorbunov/a-search-for-better-convex-decomposition-671ea647cec
 * Support Functions
   - Boxes
   - Capsules
+  - Cylinders
+* Somehow handle terrains (very irregular, nonconvex level geometry)
 
 ## Maybe Later
 * Contact Points
@@ -41,8 +40,10 @@ https://docs.godotengine.org/en/stable/classes/class_kinematicbody.html
 
 ## Resources
 * http://allenchou.net/2013/12/game-physics-collision-detection-gjk/
-* http://allenchou.net/2013/12/game-physics-contact-generation-epa/
 * https://github.com/kevinmoran/GJK
 * https://www.youtube.com/watch?v=Qupqu1xe7Io
 * https://blog.winter.dev/2020/gjk-algorithm/
-* https://www.youtube.com/watch?v=0XQ2FSz3EK8
+* http://allenchou.net/2013/12/game-physics-contact-generation-epa/
+* https://blog.winter.dev/2020/epa-algorithm/
+* http://allenchou.net/2014/02/game-physics-broadphase-dynamic-aabb-tree/
+* https://box2d.org/files/ErinCatto_DynamicBVH_Full.pdf
