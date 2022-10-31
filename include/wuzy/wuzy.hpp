@@ -21,6 +21,8 @@ struct Vec3 {
     float length() const;
     Vec3 normalized() const;
 
+    float operator[](size_t i) const;
+
     Vec3 operator-() const;
     Vec3 operator-(const Vec3& other) const;
     Vec3 operator+(const Vec3& other) const;
@@ -67,6 +69,11 @@ struct Mat4 {
     static Mat4 scale(const Vec3& v);
 };
 
+struct RayCastResult {
+    float t = std::numeric_limits<float>::max();
+    Vec3 normal = {};
+};
+
 struct Aabb {
     Vec3 min;
     Vec3 max;
@@ -79,13 +86,9 @@ struct Aabb {
 
     bool contains(const Vec3& point) const;
     bool overlaps(const Aabb& other) const;
+    std::optional<RayCastResult> rayCast(const Vec3& position, const Vec3& direction) const;
 
     Aabb combine(const Aabb& other) const; // `union` is a keyword
-};
-
-struct RayCastResult {
-    float t = std::numeric_limits<float>::max();
-    Vec3 normal = {};
 };
 
 namespace detail {
@@ -273,7 +276,8 @@ public:
     using ColliderPairList = std::vector<std::pair<Collider*, Collider*>>;
     ColliderPairList getNeighbours() const;
 
-    // RayCastResult rayCast(const Ray& ray) const;
+    std::optional<std::pair<RayCastResult, Collider*>> rayCast(
+        const Vec3& position, const Vec3& direction) const;
 
     // Returns vector of AABB + depth
     std::vector<std::pair<Aabb, uint32_t>> getAabbs() const;

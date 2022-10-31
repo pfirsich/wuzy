@@ -40,6 +40,20 @@ Vec3 Vec3::normalized() const
     return *this / length();
 }
 
+float Vec3::operator[](size_t i) const
+{
+    assert(i < 3);
+    switch (i) {
+    default:
+    case 0:
+        return x;
+    case 1:
+        return y;
+    case 2:
+        return z;
+    }
+}
+
 Vec3 Vec3::operator-() const
 {
     return Vec3 { -x, -y, -z };
@@ -199,6 +213,49 @@ bool Aabb::overlaps(const Aabb& b) const
 {
     return min.x <= b.max.x && min.y <= b.max.y && min.z <= b.max.z && max.x >= b.min.x
         && max.y >= b.min.y && max.z >= b.min.z;
+}
+
+std::optional<RayCastResult> Aabb::rayCast(const Vec3& position, const Vec3& direction) const
+{
+    // Real-Time Collision Detection, 5.3.3
+    // This could be made much faster if we extend the ray data:
+    // https://knork.org/fast-AABB-test.html
+    static const Vec3 axes[3] { xAxis, yAxis, zAxis };
+    const Vec3 ood { 1.0f / direction.x, 1.0f / direction.y, 1.0f / direction.z };
+
+    float tmin = 0.0f;
+    float tmax = std::numeric_limits<float>::max();
+    Vec3 normal;
+    for (size_t axis = 0; axis < 3; ++axis) {
+        if (std::abs(direction[axis]) < std::numeric_limits<float>::epsilon()) {
+            // Ray is parallel to slab. No hit if origin not within slab.
+            if (position[axis] < min[axis] || position[axis] > max[axis]) {
+                return std::nullopt;
+            }
+        } else {
+            // Compute intersection t value of ray with near and far plane of slab
+            float normalSign = 1.0f;
+            float t1 = (min[axis] - position[axis]) * ood[axis];
+            float t2 = (max[axis] - position[axis]) * ood[axis];
+            // Make t1 be intersection with near plane t2 with far plane
+            if (t1 > t2) {
+                std::swap(t1, t2);
+                normalSign = -1.0f;
+            }
+            if (t1 > tmin) {
+                tmin = t1;
+                normal = axes[axis] * normalSign;
+            }
+            if (t2 < tmax) {
+                tmax = t2;
+            }
+            // Exit with no collision as soon as slab intersection becomes empty
+            if (tmin > tmax) {
+                return std::nullopt;
+            }
+        }
+    }
+    return RayCastResult { tmin, normal };
 }
 
 Aabb Aabb::combine(const Aabb& other) const
@@ -999,6 +1056,38 @@ AabbTree::ColliderList AabbTree::query(const Aabb& aabb) const
 AabbTree::ColliderPairList AabbTree::getNeighbours() const
 {
     return {};
+}
+
+std::optional<std::pair<RayCastResult, Collider*>> AabbTree::rayCast(
+    const Vec3& position, const Vec3& direction) const
+{
+    std::queue<size_t> q;
+    std::optional<std::pair<RayCastResult, Collider*>> result;
+    if (rootIdx_ != InvalidIdx) {
+        q.push(rootIdx_);
+    }
+    while (q.size()) {
+        const auto& node = nodes_[q.front()];
+        q.pop();
+
+        const auto rc = node.aabb.rayCast(position, direction);
+        if (rc) {
+            if (result && result->first.t < rc->t) {
+                continue;
+            }
+
+            if (node.isLeaf()) {
+                const auto crc = node.collider->rayCast(position, direction);
+                if (crc && (!result || crc->t < result->first.t)) {
+                    result = std::pair(*crc, node.collider);
+                }
+            } else {
+                q.push(node.leftIdx);
+                q.push(node.rightIdx);
+            }
+        }
+    }
+    return result;
 }
 
 std::vector<std::pair<Aabb, uint32_t>> AabbTree::getAabbs() const
