@@ -17,24 +17,22 @@ https://docs.godotengine.org/en/stable/classes/class_kinematicbody.html
 # TODO:
 * Find and fix all GJK edge cases and consider completely different implementations
 * Fix EPA edge cases (e.g. deformed spheres (reaches max iterations sometimes and returns garbage))
-* Ray Casting
-* Be smarter about AabbTree::update (smarter than remove and re-insert)
-* Better Collision Resolution
-  http://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
-* Convex Decomposition
-  https://medium.com/@val.v.gorbunov/a-search-for-better-convex-decomposition-671ea647cec
+* Better Collision Resolution: http://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
+* Support Non-Convex Meshes:
+  - Generate Convex Hull (Quickhull)
+  - Convex Decomposition: https://medium.com/@val.v.gorbunov/a-search-for-better-convex-decomposition-671ea647cec
+  - Terrains?
+  - Brute-Force/Superslow arbitrary mesh collisions?
 * Support Functions
   - Boxes
   - Capsules
   - Cylinders
-* Somehow handle terrains (very irregular, nonconvex level geometry)
 
 ## Maybe Later
-* Contact Points
-  https://box2d.org/files/ErinCatto_GJK_GDC2010.pdf
-* Calculate closest distance with GJK result (http://allenchou.net/2013/12/game-physics-collision-detection-gjk/ - "Extra" section)
-* Hill Climbing for Extreme Vertices (Real-Time Collision Detection)
-  http://allenchou.net/2014/02/game-physics-implementing-support-function-for-polyhedrons-using-half-edges/
+* Continuous Collision Detection: https://box2d.org/files/ErinCatto_ContinuousCollision_GDC2013.pdf / https://www.youtube.com/watch?v=7_nKOET6zwI
+* Contact Points: https://box2d.org/files/ErinCatto_GJK_GDC2010.pdf
+* Calculate closest distance with GJK result: (http://allenchou.net/2013/12/game-physics-collision-detection-gjk/ - "Extra" section)
+* Hill Climbing for Extreme Vertices (Real-Time Collision Detection): http://allenchou.net/2014/02/game-physics-implementing-support-function-for-polyhedrons-using-half-edges/
 * Vertex Caching
 * Minkowski Portal Refinement
 
