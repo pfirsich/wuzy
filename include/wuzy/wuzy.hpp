@@ -83,6 +83,11 @@ struct Aabb {
     Aabb combine(const Aabb& other) const; // `union` is a keyword
 };
 
+struct RayCastResult {
+    float t = std::numeric_limits<float>::max();
+    Vec3 normal = {};
+};
+
 namespace detail {
     // This is not a full-blown StaticVector. Just what I need for the simplex.
     template <typename T, size_t N>
@@ -139,16 +144,23 @@ public:
     // a "supporting point" of the shape for a given direction.
     // It may not be unique.
     virtual Vec3 support(const Vec3& direction) const = 0;
+    virtual std::optional<RayCastResult> rayCast(
+        const Vec3& position, const Vec3& direction) const = 0;
 };
 
 class ConvexPolyhedron : public ConvexShape {
 public:
-    ConvexPolyhedron(std::vector<Vec3> vertices);
+    ConvexPolyhedron(
+        std::vector<Vec3> vertices, std::vector<std::tuple<size_t, size_t, size_t>> faces);
 
     Vec3 support(const Vec3& direction) const override;
+    std::optional<RayCastResult> rayCast(
+        const Vec3& position, const Vec3& direction) const override;
 
 private:
     std::vector<Vec3> vertices_;
+    std::vector<std::tuple<size_t, size_t, size_t>> faces_;
+    std::vector<Vec3> normals_;
 };
 
 class Sphere : public ConvexShape {
@@ -156,6 +168,8 @@ public:
     Sphere(float radius);
 
     Vec3 support(const Vec3& direction) const override;
+    std::optional<RayCastResult> rayCast(
+        const Vec3& position, const Vec3& direction) const override;
 
 private:
     float radius_;
@@ -179,6 +193,8 @@ public:
     void setTransform(const float* transformMatrix);
     Vec3 support(const Vec3& direction) const;
     Aabb getAabb() const;
+
+    std::optional<RayCastResult> rayCast(const Vec3& position, const Vec3& direction) const;
 
 private:
     struct ColliderShape {

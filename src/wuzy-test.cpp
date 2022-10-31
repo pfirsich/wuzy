@@ -111,6 +111,15 @@ int main()
         Vec3 { -hBoxSize, hBoxSize, hBoxSize },
     };
 
+    std::vector<std::tuple<size_t, size_t, size_t>> boxFaces = {
+        { 3, 0, 4 }, { 3, 4, 7 }, // -x
+        { 6, 5, 1 }, { 6, 1, 2 }, // +x
+        { 4, 0, 1 }, { 4, 1, 5 }, // -y
+        { 3, 7, 6 }, { 3, 6, 2 }, // +y
+        { 2, 1, 0 }, { 2, 0, 3 }, // -z
+        { 7, 4, 5 }, { 7, 5, 6 }, // +z
+    };
+
     struct Obstacle {
         enum class Type { Box, Sphere };
 
@@ -142,7 +151,7 @@ int main()
         auto collider = std::make_unique<Collider>();
         collider->userData = reinterpret_cast<void*>(obstacles.size());
         if (type == Obstacle::Type::Box) {
-            collider->addShape<ConvexPolyhedron>(Mat4 {}, boxVertices);
+            collider->addShape<ConvexPolyhedron>(Mat4 {}, boxVertices, boxFaces);
         } else if (type == Obstacle::Type::Sphere) {
             collider->addShape<Sphere>(Mat4 {}, hBoxSize);
         }
@@ -161,7 +170,7 @@ int main()
 
     float cameraPitch = 0.0f, cameraYaw = 0.0f;
     glwx::Transform cameraTrafo;
-    cameraTrafo.setPosition(glm::vec3(0.0f, 20.0f, 15.0f));
+    cameraTrafo.setPosition(glm::vec3(0.0f, 10.0f, 5.0f));
     cameraTrafo.lookAt(glm::vec3(0.0f));
     SDL_SetRelativeMouseMode(SDL_TRUE);
 
@@ -296,6 +305,24 @@ int main()
         for (const auto& [aabb, depth] : broadphase.getAabbs()) {
             const auto& color = aabbColors[depth % aabbColors.size()];
             debugDraw.aabb(color, vec3(aabb.min), vec3(aabb.max));
+        }
+
+        const auto camPos = cameraTrafo.getPosition();
+        const auto camFwd = cameraTrafo.getForward();
+        const auto rayStart = Vec3 { camPos.x, camPos.y, camPos.z };
+        const auto rayDir = Vec3 { camFwd.x, camFwd.y, camFwd.z };
+        RayCastResult rc;
+        for (const auto& obstacle : obstacles) {
+            const auto orc = obstacle.collider->rayCast(rayStart, rayDir);
+            if (orc && orc->t < rc.t) {
+                rc = *orc;
+            }
+        }
+        if (rc.t < std::numeric_limits<float>::max()) {
+            const auto markerPos = camPos + rc.t * camFwd;
+            debugDraw.diamond(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), markerPos, 0.05f);
+            debugDraw.arrow(
+                glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), markerPos, markerPos + vec3(rc.normal) * 0.2f);
         }
 
         window.swap();

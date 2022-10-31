@@ -39,6 +39,7 @@ https://docs.godotengine.org/en/stable/classes/class_kinematicbody.html
 * Minkowski Portal Refinement
 
 ## Resources
+* [Real-Time Collision Detection by Christer Ericson](http://realtimecollisiondetection.net/)
 * http://allenchou.net/2013/12/game-physics-collision-detection-gjk/
 * https://github.com/kevinmoran/GJK
 * https://www.youtube.com/watch?v=Qupqu1xe7Io

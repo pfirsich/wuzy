@@ -235,10 +235,21 @@ namespace {
     }
 }
 
-ConvexPolyhedron::ConvexPolyhedron(std::vector<Vec3> vertices)
+ConvexPolyhedron::ConvexPolyhedron(
+    std::vector<Vec3> vertices, std::vector<std::tuple<size_t, size_t, size_t>> faces)
     : vertices_(std::move(vertices))
+    , faces_(std::move(faces))
 {
     assert(vertices_.size() > 0);
+    assert(faces_.size() > 0);
+
+    normals_.reserve(faces_.size());
+    for (const auto& [i0, i1, i2] : faces_) {
+        const auto& v0 = vertices_[i0];
+        const auto& v1 = vertices_[i1];
+        const auto& v2 = vertices_[i2];
+        normals_.push_back((v1 - v0).cross(v2 - v0).normalized());
+    }
 }
 
 Vec3 ConvexPolyhedron::support(const Vec3& direction) const
@@ -264,6 +275,48 @@ Vec3 ConvexPolyhedron::support(const Vec3& direction) const
     return maxPoint;
 }
 
+std::optional<RayCastResult> ConvexPolyhedron::rayCast(
+    const Vec3& position, const Vec3& direction) const
+{
+    // Real-Time Collision Detection, 5.3.8
+    float tfirst = 0.0f;
+    float tlast = std::numeric_limits<float>::max();
+    Vec3 normal;
+    // Check ray against each half-space defined by each face
+    for (size_t i = 0; i < faces_.size(); ++i) {
+        const auto& n = normals_[i];
+        const auto& v0 = vertices_[std::get<0>(faces_[i])];
+        const auto d = v0.dot(n);
+
+        const auto denom = n.dot(direction);
+        const auto dist = d - n.dot(position);
+        if (denom == 0.0f) {
+            // Ray is parallel to the face
+            if (dist > 0.0f) {
+                return std::nullopt;
+            }
+        } else {
+            const auto t = dist / denom;
+            if (denom < 0.0f) {
+                // Entering half-space
+                if (t > tfirst) {
+                    tfirst = t;
+                    normal = n;
+                }
+            } else {
+                // Exiting half-space
+                if (t < tlast) {
+                    tlast = t;
+                }
+            }
+            if (tfirst > tlast) {
+                return std::nullopt;
+            }
+        }
+    }
+    return RayCastResult { tfirst, normal };
+}
+
 Sphere::Sphere(float radius)
     : radius_(radius)
 {
@@ -272,6 +325,25 @@ Sphere::Sphere(float radius)
 Vec3 Sphere::support(const Vec3& direction) const
 {
     return direction.normalized() * radius_;
+}
+
+std::optional<RayCastResult> Sphere::rayCast(const Vec3& position, const Vec3& direction) const
+{
+    // Real-Time Collision Detection, 5.3.2
+    const auto b = position.dot(direction);
+    const auto c = position.dot(position) - radius_ * radius_;
+    if (c > 0.0f && b > 0.0f) {
+        return std::nullopt;
+    }
+
+    const auto discr = b * b - c;
+    if (discr < 0.0f) {
+        return std::nullopt;
+    }
+
+    const auto t = std::max(0.0f, -b - std::sqrt(discr));
+    const auto normal = (position + direction * t).normalized();
+    return RayCastResult { t, normal };
 }
 
 void Collider::addShape(std::unique_ptr<ConvexShape> shape, Mat4 transform)
@@ -334,6 +406,24 @@ Aabb Collider::getAabb() const
         aabbDirty_ = false;
     }
     return aabb_;
+}
+
+std::optional<RayCastResult> Collider::rayCast(const Vec3& position, const Vec3& direction) const
+{
+    RayCastResult res;
+    for (const auto& shape : shapes_) {
+        const auto pos = shape.inverseFullTransform * Vec4(position, 1.0f);
+        const auto dir = shape.inverseFullTransform * Vec4(direction, 0.0f);
+        const auto rc = shape.shape->rayCast(pos, dir);
+        if (rc) {
+            res.t = std::min(res.t, rc->t);
+            res.normal = shape.fullTransform * Vec4(rc->normal, 0.0f);
+        }
+    }
+    if (res.t < std::numeric_limits<float>::max()) {
+        return res;
+    }
+    return std::nullopt;
 }
 
 namespace {
