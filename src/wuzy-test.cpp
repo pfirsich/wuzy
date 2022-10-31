@@ -168,6 +168,8 @@ int main()
     playerCollider.addShape<Sphere>(Mat4 {}, playerRadius);
     broadphase.insert(&playerCollider);
 
+    broadphase.print();
+
     float cameraPitch = 0.0f, cameraYaw = 0.0f;
     glwx::Transform cameraTrafo;
     cameraTrafo.setPosition(glm::vec3(0.0f, 10.0f, 5.0f));

@@ -278,6 +278,8 @@ public:
     // Returns vector of AABB + depth
     std::vector<std::pair<Aabb, uint32_t>> getAabbs() const;
 
+    void print() const;
+
 private:
     static constexpr size_t InvalidIdx = std::numeric_limits<size_t>::max();
 
@@ -300,6 +302,8 @@ private:
     size_t findNode(Collider* collider) const;
     void insertIntoTree(size_t nodeIdx, size_t parentIdx);
     void removeFromTree(size_t nodeIdx);
+
+    void print(size_t node, uint32_t depth) const;
 
     std::vector<Node> nodes_;
     size_t rootIdx_ = InvalidIdx;

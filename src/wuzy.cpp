@@ -3,15 +3,19 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
-
-/* Sources:
- * https://www.youtube.com/watch?v=Qupqu1xe7Io
- */
 
 using namespace wuzy::detail;
 
 namespace wuzy {
+std::string toString(const Vec3& v)
+{
+    char buf[64];
+    std::sprintf(buf, "{%f, %f, %f}", v.x, v.y, v.z);
+    return buf;
+}
+
 float Vec3::dot(const Vec3& other) const
 {
     return x * other.x + y * other.y + z * other.z;
@@ -1131,6 +1135,27 @@ void AabbTree::removeFromTree(size_t nodeIdx)
             nodes_[siblingIdx].parentIdx = grandparentIdx;
             nodes_[grandparentIdx].replaceChild(parentIdx, siblingIdx);
         }
+    }
+}
+
+void AabbTree::print() const
+{
+    print(rootIdx_, 0);
+}
+
+void AabbTree::print(size_t nodeIdx, uint32_t depth) const
+{
+    for (size_t i = 0; i < depth; ++i) {
+        std::cout << "  ";
+    }
+    const auto& node = nodes_[nodeIdx];
+
+    std::printf("%zu (collider = %p, parent = %zu)\n", nodeIdx,
+        static_cast<const void*>(nodes_[nodeIdx].collider), nodes_[nodeIdx].parentIdx);
+
+    if (!node.collider) {
+        print(node.leftIdx, depth + 1);
+        print(node.rightIdx, depth + 1);
     }
 }
 }
