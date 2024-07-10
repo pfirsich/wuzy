@@ -1,10 +1,13 @@
 #include <iostream>
+#include <span>
 
 #include <glwx/debug.hpp>
+#include <glwx/indexaccessor.hpp>
 #include <glwx/meshgen.hpp>
 #include <glwx/shader.hpp>
 #include <glwx/texture.hpp>
 #include <glwx/transform.hpp>
+#include <glwx/vertexaccessor.hpp>
 #include <glwx/window.hpp>
 
 #include "debugdraw.hpp"
@@ -76,6 +79,73 @@ glm::vec3 vec3(const Vec3& v)
     return glm::vec3(v.x, v.y, v.z);
 }
 
+glwx::Mesh makeTriangleMesh(const glw::VertexFormat& vfmt, const glwx::AttributeLocations& loc,
+    std::span<const glm::vec3> positions, std::span<const glm::vec2> texCoords,
+    std::span<const glm::vec3> normals, std::span<const size_t> indices)
+{
+    glwx::Mesh mesh;
+
+    auto& vbuf = mesh.addVertexBuffer(vfmt, glw::Buffer::UsageHint::StaticDraw);
+    vbuf.resize(positions.size());
+
+    assert(vfmt.get(loc.position));
+    auto pAcc = glwx::VertexAccessor<glm::vec3>(vbuf, loc.position);
+    for (size_t i = 0; i < positions.size(); ++i) {
+        pAcc[i] = positions[i];
+    }
+
+    if (loc.normal) {
+        assert(vfmt.get(*loc.normal));
+        assert(normals.size() == positions.size());
+        auto nAcc = glwx::VertexAccessor<glm::vec3>(vbuf, *loc.normal);
+        for (size_t i = 0; i < normals.size(); ++i) {
+            nAcc[i] = normals[i];
+        }
+    }
+
+    if (loc.texCoords) {
+        assert(vfmt.get(*loc.texCoords));
+        assert(texCoords.size() == positions.size());
+        auto tAcc = glwx::VertexAccessor<glm::vec2>(vbuf, *loc.texCoords);
+        for (size_t i = 0; i < texCoords.size(); ++i) {
+            tAcc[i] = texCoords[i];
+        }
+    }
+
+    vbuf.update();
+
+    auto& ibuf = mesh.addIndexBuffer(glw::IndexType::U8, glw::Buffer::UsageHint::StaticDraw);
+    ibuf.resize(indices.size());
+    auto iAcc = glwx::IndexAccessor(ibuf);
+    for (size_t i = 0; i < indices.size(); ++i) {
+        iAcc[i] = indices[i];
+    }
+    ibuf.update();
+
+    mesh.primitive.indexRange = glwx::Primitive::Range { 0, indices.size() };
+
+    return mesh;
+}
+
+std::vector<Vec3> to_wuzy(std::span<const glm::vec3> vs)
+{
+    std::vector<Vec3> ret;
+    for (const auto& v : vs) {
+        ret.emplace_back(Vec3 { v.x, v.y, v.z });
+    }
+    return ret;
+}
+
+std::vector<std::tuple<size_t, size_t, size_t>> to_wuzy(std::span<const size_t> is)
+{
+    assert(is.size() % 3 == 0);
+    std::vector<std::tuple<size_t, size_t, size_t>> ret;
+    for (size_t i = 0; i < is.size(); i += 3) {
+        ret.emplace_back(std::tuple<size_t, size_t, size_t> { is[i + 0], is[i + 1], is[i + 2] });
+    }
+    return ret;
+}
+
 int main()
 {
     const auto window = glwx::makeWindow("Wuzy Test", 1920, 1080).value();
@@ -87,10 +157,11 @@ int main()
 
     DebugDraw debugDraw;
 
-    glw::VertexFormat vertFmt;
-    vertFmt.add(0, 3, glw::AttributeType::F32);
-    vertFmt.add(1, 2, glw::AttributeType::U16, true);
-    vertFmt.add(2, 4, glw::AttributeType::IW2Z10Y10X10, true);
+    const glw::VertexFormat vertFmt {
+        { 0, 3, glw::AttributeType::F32 },
+        { 1, 2, glw::AttributeType::U16, true },
+        { 2, 4, glw::AttributeType::IW2Z10Y10X10, true },
+    };
 
     const auto texture = glwx::makeTexture2D(glm::vec4(1.0f));
 
@@ -120,8 +191,30 @@ int main()
         { 7, 4, 5 }, { 7, 5, 6 }, // +z
     };
 
+    const std::vector<glm::vec3> trianglePositions {
+        glm::vec3(-1.0f, -1.0f, -1.0f),
+        glm::vec3(-1.0f, 1.0f, 1.0f),
+        glm::vec3(1.0f, 1.0f, -1.0f),
+    };
+
+    const auto normal = glm::normalize(glm::cross(
+        trianglePositions[1] - trianglePositions[0], trianglePositions[2] - trianglePositions[1]));
+    const std::vector<glm::vec3> triangleNormals { normal, normal, normal };
+
+    const std::vector<glm::vec2> triangleTexCoords {
+        glm::vec2(0.0f, 0.0f),
+        glm::vec2(1.0f, 0.0f),
+        glm::vec2(0.0f, 1.0f),
+    };
+
+    const std::vector<size_t> triangleIndices { 0, 1, 2 };
+
+    const auto triangleMesh
+        = makeTriangleMesh(vertFmt, { .position = 0, .texCoords = 1, .normal = 2 },
+            trianglePositions, triangleTexCoords, triangleNormals, triangleIndices);
+
     struct Obstacle {
-        enum class Type { Box, Sphere };
+        enum class Type { Box, Sphere, Triangle };
 
         glwx::Transform trafo;
         std::unique_ptr<Collider> collider; // need stable pointers for broadphase
@@ -135,6 +228,12 @@ int main()
     auto randfRange = [randf, lerp](float min, float max) { return lerp(randf(), min, max); };
     srand(42);
 
+    constexpr std::array<Obstacle::Type, 3> obstacleTypes {
+        Obstacle::Type::Box,
+        Obstacle::Type::Sphere,
+        Obstacle::Type::Triangle,
+    };
+
     std::vector<Obstacle> obstacles;
     const auto range = 8;
     for (size_t i = 0; i < 10; ++i) {
@@ -147,13 +246,16 @@ int main()
             glm::angleAxis(randf() * glm::two_pi<float>(), glm::vec3(1.0f, 0.0f, 0.0f))
             * glm::angleAxis(randf() * glm::two_pi<float>(), glm::vec3(0.0f, 1.0f, 0.0f))
             * glm::angleAxis(randf() * glm::two_pi<float>(), glm::vec3(0.0f, 0.0f, 1.0f)));*/
-        const auto type = rand() % 2 == 0 ? Obstacle::Type::Box : Obstacle::Type::Sphere;
+        const auto type = obstacleTypes[rand() % obstacleTypes.size()];
         auto collider = std::make_unique<Collider>();
         collider->userData = reinterpret_cast<void*>(obstacles.size());
         if (type == Obstacle::Type::Box) {
             collider->addShape<ConvexPolyhedron>(Mat4 {}, boxVertices, boxFaces);
         } else if (type == Obstacle::Type::Sphere) {
             collider->addShape<Sphere>(Mat4 {}, hBoxSize);
+        } else if (type == Obstacle::Type::Triangle) {
+            collider->addShape<ConvexPolyhedron>(
+                Mat4 {}, to_wuzy(trianglePositions), to_wuzy(triangleIndices));
         }
         collider->setTransform(glm::value_ptr(trafo.getMatrix()));
         broadphase.insert(collider.get());
@@ -287,6 +389,9 @@ int main()
                 drawMesh(boxMesh, color, texture, obstacle.trafo, viewMatrix, projectionMatrix);
             } else if (obstacle.type == Obstacle::Type::Sphere) {
                 drawMesh(sphereMesh, color, texture, obstacle.trafo, viewMatrix, projectionMatrix);
+            } else if (obstacle.type == Obstacle::Type::Triangle) {
+                drawMesh(
+                    triangleMesh, color, texture, obstacle.trafo, viewMatrix, projectionMatrix);
             }
             const auto aabb = obstacle.collider->getAabb();
             debugDraw.aabb(glm::vec4(1.0f), vec3(aabb.min), vec3(aabb.max));
