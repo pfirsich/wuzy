@@ -5,6 +5,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <string>
+
+#include <iostream> // DEBUG
 
 using namespace wuzy::detail;
 
@@ -717,7 +720,7 @@ namespace {
 }
 
 namespace detail {
-    std::optional<Simplex3d> gjk(const Collider& c1, const Collider& c2)
+    std::optional<Simplex3d> gjk(const Collider& c1, const Collider& c2, GjkDebug* debug)
     {
         // As the initial direction we choose the x-axis. We want to bias the search towards the
         // origin/point of collision, so it would make sense to use the relative vector between the
@@ -733,12 +736,21 @@ namespace detail {
         Simplex3d simplex;
         simplex = { a0 };
 
+        if (debug) {
+            debug->iterations.push_back(
+                { direction, c1.support(direction), c2.support(-direction), a0, simplex, false });
+        }
+
         // Choose dir towards the origin: a0 -> O = O - a0 = -a0.
         direction = -a0;
 
         size_t numIterations = 0;
         while (++numIterations < 64) {
             const auto a = support(c1, c2, direction);
+            if (debug) {
+                debug->iterations.push_back(
+                    { direction, c1.support(direction), c2.support(-direction), a });
+            }
             if (a.dot(direction) < 0.0f) {
                 // No Intersection:
                 // We went towards the origin (direction points towards the origin) and the next
@@ -755,6 +767,10 @@ namespace detail {
             // std::cout << "simplex (" << simplex.size() << "): " << toString(simplex) <<
             // std::endl; std::cout << "direction: " << toString(direction) << std::endl;
             auto res = nextSimplex(simplex, direction);
+            if (debug) {
+                debug->iterations.back().simplex = res.simplex;
+                debug->iterations.back().containsOrigin = res.containsOrigin;
+            }
             // std::cout << "after nextSimplex" << std::endl;
             // std::cout << "containsOrigin: " << res.containsOrigin << std::endl;
             // std::cout << "simplex (" << res.simplex.size() << "): " << toString(res.simplex)
@@ -953,16 +969,17 @@ namespace detail {
     }
 }
 
-std::optional<Collision> getCollision(const Collider& a, const Collider& b)
+std::optional<Collision> getCollision(
+    const Collider& a, const Collider& b, detail::GjkDebug* gjkDebug, detail::EpaDebug* epaDebug)
 {
     if (!a.getAabb().overlaps(b.getAabb())) {
         return std::nullopt;
     }
-    const auto gjkRes = gjk(a, b);
+    const auto gjkRes = gjk(a, b, gjkDebug);
     if (!gjkRes) {
         return std::nullopt;
     }
-    return epa(a, b, *gjkRes);
+    return epa(a, b, *gjkRes, epaDebug);
 }
 
 size_t AabbTree::insert(Collider* collider)

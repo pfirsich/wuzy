@@ -98,6 +98,7 @@ namespace detail {
     public:
         StaticVector() = default;
         StaticVector(const StaticVector& other) = default;
+        StaticVector& operator=(const StaticVector& other) = default;
         StaticVector(StaticVector&& other) = default;
         StaticVector& operator=(StaticVector&& other) = default;
 
@@ -147,8 +148,8 @@ public:
     // a "supporting point" of the shape for a given direction.
     // It may not be unique.
     virtual Vec3 support(const Vec3& direction) const = 0;
-    virtual std::optional<RayCastResult> rayCast(
-        const Vec3& position, const Vec3& direction) const = 0;
+    virtual std::optional<RayCastResult> rayCast(const Vec3& position, const Vec3& direction) const
+        = 0;
 };
 
 class ConvexPolyhedron : public ConvexShape {
@@ -216,8 +217,21 @@ private:
 };
 
 namespace detail {
+    struct GjkDebug {
+        struct Iteration {
+            Vec3 direction;
+            Vec3 aSupport;
+            Vec3 bSupport;
+            Vec3 support;
+            Simplex3d simplex = {};
+            bool containsOrigin = false;
+        };
+
+        std::vector<Iteration> iterations;
+    };
+
     // Returns simplex that contains the origin, if there is a non-empty intersection
-    std::optional<Simplex3d> gjk(const Collider& c1, const Collider& c2);
+    std::optional<Simplex3d> gjk(const Collider& c1, const Collider& c2, GjkDebug* debug = nullptr);
 }
 
 bool testCollision(const Collider& a, const Collider& b);
@@ -257,7 +271,8 @@ namespace detail {
         EpaDebug* debug = nullptr);
 }
 
-std::optional<Collision> getCollision(const Collider& a, const Collider& b);
+std::optional<Collision> getCollision(const Collider& a, const Collider& b,
+    detail::GjkDebug* gjkDebug = nullptr, detail::EpaDebug* epaDebug = nullptr);
 
 class AabbTree {
 public:

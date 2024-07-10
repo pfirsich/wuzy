@@ -5,7 +5,7 @@ project(exquisite)
 # For conan
 # list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
 # list(APPEND CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR})
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 
 include(cmake/wall.cmake)
@@ -31,3 +31,7 @@ target_link_libraries(wuzy-test glwx)
 add_executable(wuzy-epa-debug "src/wuzy-epa-debug.cpp")
 target_link_libraries(wuzy-epa-debug wuzy)
 target_link_libraries(wuzy-epa-debug glwx)
+
+add_executable(wuzy-gjk-debug "src/wuzy-gjk-debug.cpp")
+target_link_libraries(wuzy-gjk-debug wuzy)
+target_link_libraries(wuzy-gjk-debug glwx)
