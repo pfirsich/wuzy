@@ -328,7 +328,7 @@ Vec3 ConvexPolyhedron::support(const Vec3& direction) const
     // vertices, so it is enough to simply check all of them.
     assert(vertices_.size() > 0);
     Vec3 maxPoint;
-    float maxDot = std::numeric_limits<float>::min();
+    float maxDot = -std::numeric_limits<float>::max();
     for (const auto& vertex : vertices_) {
         const auto dot = vertex.dot(direction);
         if (dot > maxDot) {
