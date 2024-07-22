@@ -79,6 +79,11 @@ glm::vec3 vec3(const Vec3& v)
     return glm::vec3(v.x, v.y, v.z);
 }
 
+Vec3 vec3(const glm::vec3 v)
+{
+    return Vec3 { v.x, v.y, v.z };
+}
+
 glwx::Mesh makeTriangleMesh(const glw::VertexFormat& vfmt, const glwx::AttributeLocations& loc,
     std::span<const glm::vec3> positions, std::span<const glm::vec2> texCoords,
     std::span<const glm::vec3> normals, std::span<const size_t> indices)
@@ -254,8 +259,8 @@ int main()
         } else if (type == Obstacle::Type::Sphere) {
             collider->addShape<Sphere>(Mat4 {}, hBoxSize);
         } else if (type == Obstacle::Type::Triangle) {
-            collider->addShape<ConvexPolyhedron>(
-                Mat4 {}, to_wuzy(trianglePositions), to_wuzy(triangleIndices));
+            collider->addShape<Triangle>(Mat4 {}, vec3(trianglePositions[0]),
+                vec3(trianglePositions[1]), vec3(trianglePositions[2]));
         }
         collider->setTransform(glm::value_ptr(trafo.getMatrix()));
         broadphase.insert(collider.get());

@@ -299,6 +299,55 @@ namespace {
     }
 }
 
+Triangle::Triangle(const Vec3& v0, const Vec3& v1, const Vec3& v2)
+    : vertices_ { v0, v1, v2 }
+    , normal_((v1 - v0).cross(v2 - v0))
+{
+}
+
+Vec3 Triangle::support(const Vec3& direction) const
+{
+    Vec3 maxPoint;
+    float maxDot = -std::numeric_limits<float>::max();
+    for (const auto& vertex : vertices_) {
+        const auto dot = vertex.dot(direction);
+        if (dot > maxDot) {
+            maxDot = dot;
+            maxPoint = vertex;
+        }
+    }
+    return maxPoint;
+}
+
+std::optional<RayCastResult> Triangle::rayCast(const Vec3& pos, const Vec3& dir) const
+{
+    // Check if ray points towards triangle (or coplanar)
+    const auto d = -normal_.dot(dir);
+    if (d <= 0.0f) {
+        return std::nullopt;
+    }
+
+    // Check in which half space the ray origin is
+    const auto tr = pos - vertices_[0];
+    const auto t = normal_.dot(tr);
+    if (t < 0.0f) {
+        return std::nullopt;
+    }
+
+    // compute barycentric coordinates of intersection
+    const auto e = dir.cross(tr);
+    const auto v = -(vertices_[2] - vertices_[0]).dot(e);
+    if (v < 0.0f || v > d) {
+        return std::nullopt;
+    }
+    const auto w = (vertices_[1] - vertices_[0]).dot(e);
+    if (w < 0.0f || v + w > d) {
+        return std::nullopt;
+    }
+
+    return RayCastResult { t / d, normal_.normalized() };
+}
+
 ConvexPolyhedron::ConvexPolyhedron(
     std::vector<Vec3> vertices, std::vector<std::tuple<size_t, size_t, size_t>> faces)
     : vertices_(std::move(vertices))
@@ -797,7 +846,7 @@ bool testCollision(const Collider& c1, const Collider& c2)
 }
 
 namespace {
-    void updateNormal(const std::vector<Vec3>& vertices, Triangle& face)
+    void updateNormal(const std::vector<Vec3>& vertices, EpaTriangle& face)
     {
         const auto& v0 = vertices[face.v0];
         const auto& v1 = vertices[face.v1];
@@ -826,7 +875,7 @@ namespace {
     }
 
     // Returns the index of the face closest to the origin and its distance.
-    std::pair<size_t, float> getClosestFace(const std::vector<Triangle>& faces)
+    std::pair<size_t, float> getClosestFace(const std::vector<EpaTriangle>& faces)
     {
         float minDist = std::numeric_limits<float>::max();
         size_t minFaceIdx = 0;
@@ -854,7 +903,7 @@ namespace detail {
         assert(simplex.size() == 4);
 
         std::vector<Vec3> polytopeVertices(simplex.begin(), simplex.end());
-        std::vector<Triangle> polytopeFaces {
+        std::vector<EpaTriangle> polytopeFaces {
             { 0, 1, 2 },
             { 0, 2, 3 },
             { 0, 3, 1 },

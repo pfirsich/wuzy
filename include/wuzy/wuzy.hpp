@@ -152,6 +152,18 @@ public:
         = 0;
 };
 
+class Triangle : public ConvexShape {
+public:
+    Triangle(const Vec3& v0, const Vec3& v1, const Vec3& v2);
+    Vec3 support(const Vec3& direction) const override;
+    std::optional<RayCastResult> rayCast(
+        const Vec3& position, const Vec3& direction) const override;
+
+private:
+    std::array<Vec3, 3> vertices_;
+    Vec3 normal_;
+};
+
 class ConvexPolyhedron : public ConvexShape {
 public:
     ConvexPolyhedron(
@@ -244,7 +256,7 @@ struct Collision {
 };
 
 namespace detail {
-    struct Triangle {
+    struct EpaTriangle {
         size_t v0;
         size_t v1;
         size_t v2;
@@ -255,7 +267,7 @@ namespace detail {
     struct EpaDebug {
         struct Iteration {
             std::vector<Vec3> polytopeVertices;
-            std::vector<Triangle> polytopeFaces;
+            std::vector<EpaTriangle> polytopeFaces;
             size_t minDistFaceIdx;
             float minFaceDist;
             Vec3 supPoint;
