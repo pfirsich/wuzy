@@ -445,7 +445,8 @@ std::optional<RayCastResult> Sphere::rayCast(const Vec3& position, const Vec3& d
     // Real-Time Collision Detection, 5.3.2
     const auto b = position.dot(direction);
     const auto c = position.dot(position) - radius_ * radius_;
-    if (c > 0.0f && b > 0.0f) {
+    // ray starts outside sphere and points away from it or ray starts inside the sphere
+    if ((c > 0.0f && b > 0.0f) || c < 0.0f) {
         return std::nullopt;
     }
 
