@@ -9,7 +9,7 @@ It will just do collision detection and resolution, no kinematics or dynamics. Y
 
 Most of the games I made were not made with any of the big engines, so I only used a proper physics engine a few times and I hated it quite a bit. It's very restrictive that most of the time you cannot set the position directly (which makes sense, but it is restrictive none the less) and I firmly believe that for most games the optimal physics have nothing to do with real-world kinematics and dynamics, so this library handles collision detection and resolution. No accelerations or forces, no contraints or anything of the sort. Maybe velocites if I ever introduce continuous collision detection.
 
-This is not made for AAA games and millions of colliders. This is for games that hobby gamedevs might make in a gamejam or the average indie game you can get on Steam. It tries to be obvious, easy to integrate and use and not as fast a possible.
+This is not made for AAA games and millions of colliders. This is for games that hobby gamedevs might make in a gamejam or the average indie game you can get on Steam. It tries to be obvious, easy to integrate and use and not as fast a possible. It's supposed to provide the minimum amount of collision detection and resolution you need to make a game (that is not super focused on physics).
 
 Something like this:
 https://docs.godotengine.org/en/stable/classes/class_kinematicbody.html
@@ -19,16 +19,14 @@ https://docs.godotengine.org/en/stable/classes/class_kinematicbody.html
 * Fix EPA edge cases (e.g. deformed spheres (reaches max iterations sometimes and returns garbage))
 * Better Collision Resolution: http://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
 * Support Non-Convex Meshes:
-  - Generate Convex Hull (Quickhull)
-  - Convex Decomposition: https://medium.com/@val.v.gorbunov/a-search-for-better-convex-decomposition-671ea647cec
   - Terrains?
-  - Brute-Force/Superslow arbitrary mesh collisions?
 * Support Functions
-  - Boxes
   - Capsules
   - Cylinders
 
 ## Maybe Later
+* Generate Convex Hull (Quickhull)
+* Convex Decomposition: https://medium.com/@val.v.gorbunov/a-search-for-better-convex-decomposition-671ea647cec
 * Continuous Collision Detection: https://box2d.org/files/ErinCatto_ContinuousCollision_GDC2013.pdf / https://www.youtube.com/watch?v=7_nKOET6zwI
 * Contact Points: https://box2d.org/files/ErinCatto_GJK_GDC2010.pdf
 * Calculate closest distance with GJK result: (http://allenchou.net/2013/12/game-physics-collision-detection-gjk/ - "Extra" section)
