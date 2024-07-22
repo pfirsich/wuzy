@@ -148,6 +148,7 @@ public:
     // a "supporting point" of the shape for a given direction.
     // It may not be unique.
     virtual Vec3 support(const Vec3& direction) const = 0;
+
     virtual std::optional<RayCastResult> rayCast(const Vec3& position, const Vec3& direction) const
         = 0;
 };
@@ -210,6 +211,10 @@ public:
     Vec3 support(const Vec3& direction) const;
     Aabb getAabb() const;
 
+    uint64_t getBitmask() const { return bitmask_; }
+
+    void setBitmask(uint64_t v) { bitmask_ = v; }
+
     std::optional<RayCastResult> rayCast(const Vec3& position, const Vec3& direction) const;
 
 private:
@@ -226,6 +231,7 @@ private:
     Mat4 inverseTransform_;
     mutable Aabb aabb_;
     mutable bool aabbDirty_ = true;
+    uint64_t bitmask_ = 0xffff'ffff'ffff'ffff;
 };
 
 namespace detail {
@@ -303,8 +309,8 @@ public:
     using ColliderPairList = std::vector<std::pair<Collider*, Collider*>>;
     ColliderPairList getNeighbours() const;
 
-    std::optional<std::pair<RayCastResult, Collider*>> rayCast(
-        const Vec3& position, const Vec3& direction) const;
+    std::optional<std::pair<RayCastResult, Collider*>> rayCast(const Vec3& position,
+        const Vec3& direction, uint64_t bitmask = 0xffff'ffff'ffff'ffff) const;
 
     // Returns vector of AABB + depth
     std::vector<std::pair<Aabb, uint32_t>> getAabbs() const;
@@ -316,6 +322,7 @@ private:
 
     struct Node {
         Aabb aabb;
+        uint64_t bitmask = 0;
 
         size_t parentIdx = InvalidIdx;
         size_t leftIdx = InvalidIdx;
@@ -329,7 +336,7 @@ private:
     };
 
     size_t getNewNode();
-    void updateAabb(size_t nodeIdx);
+    void updateNodeData(size_t nodeIdx);
     size_t findNode(Collider* collider) const;
     void insertIntoTree(size_t nodeIdx, size_t parentIdx);
     void removeFromTree(size_t nodeIdx);

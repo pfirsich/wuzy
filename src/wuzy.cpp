@@ -1036,7 +1036,7 @@ size_t AabbTree::insert(Collider* collider)
 {
     const auto idx = getNewNode();
     nodes_[idx].collider = collider;
-    updateAabb(idx);
+    updateNodeData(idx);
     insertIntoTree(idx, rootIdx_);
     return idx;
 }
@@ -1070,7 +1070,7 @@ void AabbTree::updateNode(size_t nodeIdx)
 {
     assert(nodeIdx < nodes_.size());
     removeFromTree(nodeIdx);
-    updateAabb(nodeIdx);
+    updateNodeData(nodeIdx);
     insertIntoTree(nodeIdx, rootIdx_);
 }
 
@@ -1126,7 +1126,7 @@ AabbTree::ColliderPairList AabbTree::getNeighbours() const
 }
 
 std::optional<std::pair<RayCastResult, Collider*>> AabbTree::rayCast(
-    const Vec3& position, const Vec3& direction) const
+    const Vec3& position, const Vec3& direction, uint64_t bitmask) const
 {
     std::queue<size_t> q;
     std::optional<std::pair<RayCastResult, Collider*>> result;
@@ -1136,6 +1136,10 @@ std::optional<std::pair<RayCastResult, Collider*>> AabbTree::rayCast(
     while (q.size()) {
         const auto& node = nodes_[q.front()];
         q.pop();
+
+        if ((node.bitmask & bitmask) == 0) {
+            continue;
+        }
 
         const auto rc = node.aabb.rayCast(position, direction);
         if (rc) {
@@ -1202,16 +1206,18 @@ size_t AabbTree::getNewNode()
     return nodes_.size() - 1;
 }
 
-void AabbTree::updateAabb(size_t nodeIdx)
+void AabbTree::updateNodeData(size_t nodeIdx)
 {
     auto& node = nodes_[nodeIdx];
     if (node.collider) {
         node.aabb = node.collider->getAabb();
+        node.bitmask = node.collider->getBitmask();
     } else {
         assert(node.leftIdx != InvalidIdx && node.rightIdx != InvalidIdx);
         const auto& left = nodes_[node.leftIdx];
         const auto& right = nodes_[node.rightIdx];
         node.aabb = left.aabb.combine(right.aabb);
+        node.bitmask = left.bitmask | right.bitmask;
     }
 }
 
@@ -1252,7 +1258,7 @@ void AabbTree::insertIntoTree(size_t nodeIdx, size_t parentIdx)
         nodes_[nodeIdx].parentIdx = newParentIdx;
         nodes_[parentIdx].parentIdx = newParentIdx;
 
-        updateAabb(newParentIdx);
+        updateNodeData(newParentIdx);
     } else {
         assert(nodes_[parentIdx].leftIdx != InvalidIdx && nodes_[parentIdx].rightIdx != InvalidIdx);
         const auto& leftAabb = nodes_[nodes_[parentIdx].leftIdx].aabb;
@@ -1266,7 +1272,7 @@ void AabbTree::insertIntoTree(size_t nodeIdx, size_t parentIdx)
         } else {
             insertIntoTree(nodeIdx, nodes_[parentIdx].rightIdx);
         }
-        updateAabb(parentIdx);
+        updateNodeData(parentIdx);
     }
 }
 
