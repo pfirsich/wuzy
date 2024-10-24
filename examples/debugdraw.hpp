@@ -7,36 +7,34 @@
 
 class DebugDraw {
 public:
-    DebugDraw(size_t maxNumVertices = 2048)
-        : shader_(glwx::makeShaderProgram(vert, frag).value())
+    DebugDraw(size_t max_num_vertices = 2048) : shader_(glwx::makeShaderProgram(vert, frag).value())
     {
-
-        vertexArray_.bind();
-        vertexBuffer_.bind(glw::Buffer::Target::Array);
+        vertex_array_.bind();
+        vertex_buffer_.bind(glw::Buffer::Target::Array);
 
         glw::VertexFormat fmt;
         fmt.add(0, 3, glw::AttributeType::F32);
         fmt.set();
 
-        vertexArray_.unbind();
-        vertexBuffer_.unbind(glw::Buffer::Target::Array);
+        vertex_array_.unbind();
+        vertex_buffer_.unbind(glw::Buffer::Target::Array);
 
-        vertexBuffer_.data(glw::Buffer::Target::Array, glw::Buffer::UsageHint::StreamDraw, nullptr,
-            sizeof(float) * 3 * maxNumVertices);
+        vertex_buffer_.data(glw::Buffer::Target::Array, glw::Buffer::UsageHint::StreamDraw, nullptr,
+            sizeof(float) * 3 * max_num_vertices);
     }
 
     void lines(const glm::vec4& color, const std::vector<glm::vec3>& vertices)
     {
-        vertexBuffer_.subData(glw::Buffer::Target::Array, vertices);
+        vertex_buffer_.subData(glw::Buffer::Target::Array, vertices);
 
         shader_.bind();
-        shader_.setUniform("viewProjectionMatrix", viewProjectionMatrix_);
+        shader_.setUniform("view_projection_matrix", view_projection_matrix_);
         shader_.setUniform("color", color);
 
-        vertexArray_.bind();
+        vertex_array_.bind();
         glDrawArrays(GL_LINES, 0, vertices.size());
 
-        vertexArray_.unbind();
+        vertex_array_.unbind();
         shader_.unbind();
     }
 
@@ -46,33 +44,34 @@ public:
         assert(slices >= 4);
         assert(stacks >= 3);
 
-        const auto deltaStackAngle = glm::pi<float>() / (stacks - 1);
-        const auto deltaSliceAngle = 2.0f * glm::pi<float>() / slices;
+        const auto delta_stack_angle = glm::pi<float>() / (stacks - 1);
+        const auto delta_slice_angle = 2.0f * glm::pi<float>() / slices;
 
         std::vector<glm::vec3> points;
         for (size_t stack = 0; stack < stacks; ++stack) {
-            const auto stackAngle = deltaStackAngle * stack;
-            const auto xzRadius = glm::sin(stackAngle) * radius;
-            const auto y = glm::cos(stackAngle) * radius;
+            const auto stack_angle = delta_stack_angle * stack;
+            const auto xz_radius = glm::sin(stack_angle) * radius;
+            const auto y = glm::cos(stack_angle) * radius;
             for (size_t slice = 0; slice < slices; ++slice) {
-                const float sliceAngle = deltaSliceAngle * slice;
+                const float slice_angle = delta_slice_angle * slice;
                 // north-south line
                 points.push_back(position
                     + glm::vec3(
-                        glm::cos(sliceAngle) * xzRadius, y, glm::sin(sliceAngle) * xzRadius));
+                        glm::cos(slice_angle) * xz_radius, y, glm::sin(slice_angle) * xz_radius));
                 points.push_back(position
                     + glm::vec3(
-                        glm::cos(sliceAngle) * glm::sin(stackAngle + deltaStackAngle) * radius,
-                        glm::cos(stackAngle + deltaStackAngle) * radius,
-                        glm::sin(sliceAngle) * glm::sin(stackAngle + deltaStackAngle) * radius));
+                        glm::cos(slice_angle) * glm::sin(stack_angle + delta_stack_angle) * radius,
+                        glm::cos(stack_angle + delta_stack_angle) * radius,
+                        glm::sin(slice_angle) * glm::sin(stack_angle + delta_stack_angle)
+                            * radius));
                 if (stack != 0 && stack != stacks - 1) {
                     // west-east line
                     points.push_back(position
-                        + glm::vec3(
-                            glm::cos(sliceAngle) * xzRadius, y, glm::sin(sliceAngle) * xzRadius));
+                        + glm::vec3(glm::cos(slice_angle) * xz_radius, y,
+                            glm::sin(slice_angle) * xz_radius));
                     points.push_back(position
-                        + glm::vec3(glm::cos(sliceAngle + deltaSliceAngle) * xzRadius, y,
-                            glm::sin(sliceAngle + deltaSliceAngle) * xzRadius));
+                        + glm::vec3(glm::cos(slice_angle + delta_slice_angle) * xz_radius, y,
+                            glm::sin(slice_angle + delta_slice_angle) * xz_radius));
                 }
             }
         }
@@ -115,35 +114,35 @@ public:
         // clang-format on
     }
 
-    void setViewProjectionMatrix(const glm::mat4& viewProjectionMatrix)
+    void set_view_projection_matrix(const glm::mat4& view_projection_matrix)
     {
-        viewProjectionMatrix_ = viewProjectionMatrix;
+        view_projection_matrix_ = view_projection_matrix;
     }
 
 private:
     static constexpr std::string_view vert = R"(
         #version 150
         in vec3 position;
-        uniform mat4 viewProjectionMatrix;
+        uniform mat4 view_projection_matrix;
 
         void main()
         {
-            gl_Position = viewProjectionMatrix * vec4(position, 1.0);
+            gl_Position = view_projection_matrix * vec4(position, 1.0);
         }
     )";
     static constexpr std::string_view frag = R"(
         #version 150
-        out vec4 fragColor;
+        out vec4 frag_color;
         uniform vec4 color;
 
         void main()
         {
-            fragColor = color;
+            frag_color = color;
         }
     )";
 
-    glw::VertexArray vertexArray_;
-    glw::Buffer vertexBuffer_;
+    glw::VertexArray vertex_array_;
+    glw::Buffer vertex_buffer_;
     glw::ShaderProgram shader_;
-    glm::mat4 viewProjectionMatrix_;
+    glm::mat4 view_projection_matrix_;
 };
