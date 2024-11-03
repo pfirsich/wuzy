@@ -1331,6 +1331,16 @@ struct AabbTree {
             new_parent->update_from_children();
             return true;
         } else {
+            // We try to find a good place for the new node and we do this by minimizing the
+            // increase in total volume of our nodes. The probability of a ray hitting an AABB is
+            // roughly proportional to its surface area and the probability for an AABB to collide
+            // (overlap) with another is roughly proportional to its volume. I chose to prioritize
+            // collision detection performance here, so I use the volume.
+            // The less volume our nodes have, the more empty space we can rule out in each
+            // iteration.
+            // Therefore we define the total cost of a tree as the volume of all it's interior
+            // nodes. The cost of the leaf nodes is the same in every configuration, so we do not
+            // have to include it, but this is irrelevant here.
             assert(parent->left && parent->right);
             const auto left_vol_diff
                 = volume(combine(parent->left->aabb, node->aabb)) - volume(parent->left->aabb);
