@@ -29,6 +29,7 @@ template <typename T>
 T* allocate(wuzy_allocator* alloc, size_t count = 1)
 {
     alloc = alloc ? alloc : default_allocator();
+    // NOLINTNEXTLINE(bugprone-sizeof-expression)
     auto ptr = reinterpret_cast<T*>(alloc->allocate(sizeof(T) * count, alloc->ctx));
     for (size_t i = 0; i < count; ++i) {
         new (ptr + i) T {};
@@ -53,6 +54,7 @@ void deallocate(wuzy_allocator* alloc, T* ptr, size_t count = 1)
     for (size_t i = 0; i < count; ++i) {
         (ptr + i)->~T();
     }
+    // NOLINTNEXTLINE(bugprone-sizeof-expression)
     return alloc->deallocate(ptr, sizeof(T) * count, alloc->ctx);
 }
 
