@@ -1212,8 +1212,6 @@ EXPORT bool wuzy_get_collision(const wuzy_collider* a, const wuzy_collider* b,
 }
 
 namespace {
-static constexpr size_t InvalidIdx = std::numeric_limits<size_t>::max();
-
 uint32_t id_get_idx(uint32_t id)
 {
     return id & 0xFFFF;
