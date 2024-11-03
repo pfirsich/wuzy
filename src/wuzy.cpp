@@ -135,7 +135,8 @@ wuzy_mat4 transpose(const wuzy_mat4& m)
 
 wuzy_mat4 mul(const wuzy_mat4& a, const wuzy_mat4& b)
 {
-    const auto r = transpose(a).cols; // a rows
+    const auto tr = transpose(a);
+    const auto& r = tr.cols; // a rows
     const auto c = b.cols; // b columns
     return wuzy_mat4 {
         wuzy_vec4 { dot(r[0], c[0]), dot(r[1], c[0]), dot(r[2], c[0]), dot(r[3], c[0]) },
@@ -147,7 +148,8 @@ wuzy_mat4 mul(const wuzy_mat4& a, const wuzy_mat4& b)
 
 wuzy_vec3 mul(const wuzy_mat4& m, const wuzy_vec3& v, float w)
 {
-    const auto rows = transpose(m).cols;
+    const auto tr = transpose(m);
+    const auto& rows = tr.cols;
     const auto vec = wuzy_vec4 { v.x, v.y, v.z, w };
     return wuzy_vec3 { dot(rows[0], vec), dot(rows[1], vec), dot(rows[2], vec) };
 }
