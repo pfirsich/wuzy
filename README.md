@@ -7,7 +7,7 @@ I feel like either you bump a few spheres and AABBs into each other with your ow
 
 This is supposed to be the least amount of code that lets you control a character in a level.
 
-It will just do collision detection and resolution, no kinematics or dynamics. You can just create colliders and bump them into each other and get vectors that resolve the collision.
+It will just do collision detection and resolution, no kinematics or dynamics. You can just create colliders and bump them into each other and get vectors that resolve the collision. It also does ray casting.
 
 Most of the games I made were not made with any of the big engines, so I only used a proper physics engine a few times and I hated it quite a bit. It's very restrictive that most of the time you cannot set the position directly (which makes sense, but it is restrictive none the less) and I firmly believe that for most games the optimal physics have nothing to do with real-world kinematics and dynamics, so this library handles collision detection and resolution. No accelerations or forces, no constraints or anything of the sort. Maybe velocites if I ever introduce continuous collision detection.
 
@@ -32,17 +32,19 @@ If you need collisions with meshes, like levels, just create a separate collider
 
 # TODO:
 * AABB Tree Rebalancing, bulk-insert of nodes that balances tree (for levels): https://box2d.org/files/ErinCatto_DynamicBVH_Full.pdf
-* Capsule Support Functions
+* Tests!
+* Capsule Shapes - The support function is easy, but ray casting is not.
 * Some support for continuous collision detection - I really just need support for sweeping shapes to the support functions (somehow). The swept shapes are convex again (for linear movement at least), so there has to be a way. If you really need this and this hasn't been implemented yet, just do some raycasts and then multisample.
   - https://box2d.org/files/ErinCatto_ContinuousCollision_GDC2013.pdf
   - https://www.youtube.com/watch?v=7_nKOET6zwI
 
 ## Maybe Later
-* Better Collision Resolution: http://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
 * Calculate closest distance with GJK result: (http://allenchou.net/2013/12/game-physics-collision-detection-gjk/ - "Extra" section)
-* Hill Climbing for Extreme Vertices (Real-Time Collision Detection): http://allenchou.net/2014/02/game-physics-implementing-support-function-for-polyhedrons-using-half-edges/
+* Enlarged AABBs - store enlarged AABBs in the AABB Tree and only update a leaf if they actual ("tight") AABB moves outside of the enlarged AABB, so moving objects don't require a tree update every frame.
+* Hill Climbing for Extreme Vertices (Real-Time Collision Detection): http://allenchou.net/2014/02/game-physics-implementing-support-function-for-polyhedrons-using-half-edges/ - It makes a lot of sense algorithmically, but I think it's very cache-unfriendly and you need very large polyhedra for this to make sense (haven't tried it though).
 * Heightmap Terrains
 * [Minkowski Portal Refinement](https://en.wikipedia.org/wiki/Minkowski_Portal_Refinement) / [XenoCollide](http://xenocollide.snethen.com/)
+* Better Collision Resolution: http://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
 * Contact Points: https://box2d.org/files/ErinCatto_GJK_GDC2010.pdf, GDC10_Coumans_Erwin_Contact.pdf - This is actually really hard, because you often need multiple contacts and GJK/EPA can only give you one, so you need to cache them across frames. Also contact points are essential for physics engines (you need to apply forces), but you don't really need them if you just bump a few shapes into each other and calculating them isn't free. I will think about this again, if I really need it, but that hasn't happened yet.
 
 ## Resources
