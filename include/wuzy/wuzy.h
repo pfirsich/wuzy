@@ -189,6 +189,24 @@ void wuzy_aabb_tree_destroy(wuzy_aabb_tree* tree);
    done based on the bitmask, i.e. it is as if 0xffff'ffff'ffff'ffff was passed.
  */
 
+typedef struct wuzy_aabb_tree_init_node wuzy_aabb_tree_init_node;
+
+struct wuzy_aabb_tree_init_node {
+    wuzy_aabb_tree_node id; // Will be set by init
+    // for internal nodes, left and right must be non-null and collider must be null
+    // for leaf nodes, left and right must be null and collider must be non-null
+    wuzy_collider* collider;
+    uint64_t bitmask; // bitmask is ignored for internal nodes
+    wuzy_aabb_tree_init_node* left;
+    wuzy_aabb_tree_init_node* right;
+};
+
+// Building these trees is not free, so you might want to dump then at asset compile time
+// (wuzy_aabb_tree_dump) and then use this function to load it back at load time using this
+// function. This function asserts that the tree is empty.
+// You may also build even more optimized trees offline and load them in here.
+bool wuzy_aabb_tree_init(wuzy_aabb_tree* tree, wuzy_aabb_tree_init_node* root_node);
+
 // If 0 is passed for the bitmask, it is set to 0xffff'ffff'ffff'ffff.
 // Will return invalid node (id = 0) if the node could not be inserted (maximum number of nodes
 // reached).
@@ -205,11 +223,21 @@ bool wuzy_aabb_tree_update(wuzy_aabb_tree* tree, wuzy_aabb_tree_node node, uint6
 // Will return whether the given node existed before removal.
 bool wuzy_aabb_tree_remove(wuzy_aabb_tree* tree, wuzy_aabb_tree_node node);
 
-typedef struct wuzy_aabb_tree_debug_node wuzy_aabb_tree_debug_node;
+typedef struct wuzy_aabb_tree_dump_node wuzy_aabb_tree_dump_node;
+
+struct wuzy_aabb_tree_dump_node {
+    wuzy_aabb_tree_node id;
+    const wuzy_collider* collider; // will be null for internal nodes
+    wuzy_aabb aabb;
+    uint64_t bitmask;
+    wuzy_aabb_tree_dump_node* parent;
+    wuzy_aabb_tree_dump_node* left;
+    wuzy_aabb_tree_dump_node* right;
+};
 
 // Returns number of nodes
-size_t wuzy_aabb_tree_get_debug_nodes(
-    const wuzy_aabb_tree* tree, wuzy_aabb_tree_debug_node* nodes, size_t max_num_nodes);
+size_t wuzy_aabb_tree_dump(
+    const wuzy_aabb_tree* tree, wuzy_aabb_tree_dump_node* nodes, size_t max_num_nodes);
 
 typedef struct wuzy_aabb_tree_node_query wuzy_aabb_tree_node_query;
 
@@ -332,16 +360,6 @@ struct wuzy_epa_debug {
 };
 
 void wuzy_epa_debug_free(wuzy_epa_debug* debug);
-
-struct wuzy_aabb_tree_debug_node {
-    wuzy_aabb_tree_node id;
-    const wuzy_collider* collider; // will be null for internal nodes
-    wuzy_aabb aabb;
-    uint64_t bitmask;
-    wuzy_aabb_tree_debug_node* parent;
-    wuzy_aabb_tree_debug_node* left;
-    wuzy_aabb_tree_debug_node* right;
-};
 
 #ifdef __cplusplus
 }

@@ -1440,6 +1440,38 @@ EXPORT void wuzy_aabb_tree_destroy(wuzy_aabb_tree* wtree)
     deallocate(tree->alloc, tree);
 }
 
+namespace {
+Node* insert_node(AabbTree* tree, Node* parent, wuzy_aabb_tree_init_node* init_node)
+{
+    auto node = tree->get_new_node();
+    if (!node) {
+        return node;
+    }
+    init_node->id.id = tree->get_id(node);
+    node->collider = init_node->collider;
+    if (node->collider) { // leaf node
+        assert(!init_node->left && !init_node->right);
+        node->bitmask = init_node->bitmask ? init_node->bitmask : static_cast<uint64_t>(-1);
+        node->aabb = wuzy_collider_get_aabb(init_node->collider);
+        node->parent = parent;
+    } else {
+        assert(init_node->left && init_node->right);
+        node->left = insert_node(tree, node, init_node->left);
+        node->right = insert_node(tree, node, init_node->right);
+        node->update_from_children();
+    }
+    return node;
+}
+}
+
+EXPORT bool wuzy_aabb_tree_init(wuzy_aabb_tree* wtree, wuzy_aabb_tree_init_node* root_node)
+{
+    auto tree = reinterpret_cast<AabbTree*>(wtree);
+    assert(tree->num_nodes == 0);
+    tree->root = insert_node(tree, nullptr, root_node);
+    return tree->root;
+}
+
 EXPORT wuzy_aabb_tree_node wuzy_aabb_tree_insert(
     wuzy_aabb_tree* wtree, wuzy_collider* collider, uint64_t bitmask)
 {
@@ -1455,8 +1487,7 @@ EXPORT wuzy_aabb_tree_node wuzy_aabb_tree_insert(
         tree->free_node(node);
         return { 0 };
     }
-    const auto idx = static_cast<uint32_t>(node - tree->nodes);
-    return { id_combine(idx, node->generation) };
+    return { tree->get_id(node) };
 }
 
 EXPORT wuzy_collider* wuzy_aabb_tree_get_collider(wuzy_aabb_tree* wtree, wuzy_aabb_tree_node wnode)
@@ -1494,8 +1525,8 @@ EXPORT bool wuzy_aabb_tree_remove(wuzy_aabb_tree* wtree, wuzy_aabb_tree_node wno
 }
 
 namespace {
-wuzy_aabb_tree_debug_node* add_node(const AabbTree* tree, Node* node,
-    wuzy_aabb_tree_debug_node* parent, wuzy_aabb_tree_debug_node* nodes, size_t* num_nodes,
+wuzy_aabb_tree_dump_node* add_node(const AabbTree* tree, Node* node,
+    wuzy_aabb_tree_dump_node* parent, wuzy_aabb_tree_dump_node* nodes, size_t* num_nodes,
     size_t max_num_nodes)
 {
     if (!node) {
@@ -1512,8 +1543,8 @@ wuzy_aabb_tree_debug_node* add_node(const AabbTree* tree, Node* node,
 }
 }
 
-EXPORT size_t wuzy_aabb_tree_get_debug_nodes(
-    const wuzy_aabb_tree* wtree, wuzy_aabb_tree_debug_node* nodes, size_t max_num_nodes)
+EXPORT size_t wuzy_aabb_tree_dump(
+    const wuzy_aabb_tree* wtree, wuzy_aabb_tree_dump_node* nodes, size_t max_num_nodes)
 {
     auto tree = reinterpret_cast<const AabbTree*>(wtree);
     if (!nodes || max_num_nodes < tree->num_nodes) {

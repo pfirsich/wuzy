@@ -265,7 +265,7 @@ glm::quat camera_look(float& pitch, float& yaw, const glm::vec2& look)
 }
 
 void collect_aabbs(std::vector<std::pair<wuzy_aabb, uint32_t>>& aabbs,
-    const wuzy_aabb_tree_debug_node* node, uint32_t depth = 0)
+    const wuzy_aabb_tree_dump_node* node, uint32_t depth = 0)
 {
     aabbs.push_back({ node->aabb, depth });
     if (!node->collider) {
@@ -275,7 +275,7 @@ void collect_aabbs(std::vector<std::pair<wuzy_aabb, uint32_t>>& aabbs,
 }
 
 std::vector<std::pair<wuzy_aabb, uint32_t>> get_aabbs(
-    const std::vector<wuzy_aabb_tree_debug_node> debug_nodes)
+    const std::vector<wuzy_aabb_tree_dump_node> debug_nodes)
 {
     std::vector<std::pair<wuzy_aabb, uint32_t>> aabbs;
     collect_aabbs(aabbs, &debug_nodes[0]);
@@ -294,7 +294,7 @@ void draw_broadphase_debug(wuzy::AabbTree& broadphase, DebugDraw& debug_draw)
         glm::vec4(1.0f, 1.0f, 1.0f, 1.0f),
     };
 
-    const auto debug_nodes = broadphase.get_debug_nodes();
+    const auto debug_nodes = broadphase.dump_nodes();
     for (const auto& [aabb, depth] : get_aabbs(debug_nodes)) {
         const auto& color = aabb_colors[depth % aabb_colors.size()];
         debug_draw.aabb(color, vec3(aabb.min), vec3(aabb.max));

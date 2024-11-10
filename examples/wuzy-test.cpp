@@ -158,7 +158,7 @@ std::vector<std::tuple<size_t, size_t, size_t>> to_wuzy(std::span<const size_t> 
 }
 
 void collect_aabbs(std::vector<std::pair<wuzy_aabb, uint32_t>>& aabbs,
-    const wuzy_aabb_tree_debug_node* node, uint32_t depth = 0)
+    const wuzy_aabb_tree_dump_node* node, uint32_t depth = 0)
 {
     aabbs.push_back({ node->aabb, depth });
     if (!node->collider) {
@@ -168,7 +168,7 @@ void collect_aabbs(std::vector<std::pair<wuzy_aabb, uint32_t>>& aabbs,
 }
 
 std::vector<std::pair<wuzy_aabb, uint32_t>> get_aabbs(
-    const std::vector<wuzy_aabb_tree_debug_node> debug_nodes)
+    const std::vector<wuzy_aabb_tree_dump_node> debug_nodes)
 {
     std::vector<std::pair<wuzy_aabb, uint32_t>> aabbs;
     collect_aabbs(aabbs, &debug_nodes[0]);
@@ -301,7 +301,7 @@ int main()
     wuzy::SphereCollider player_collider(player_radius);
     const auto player_node = broadphase.insert(player_collider);
 
-    std::vector<wuzy_aabb_tree_debug_node> bp_debug_nodes(128);
+    std::vector<wuzy_aabb_tree_dump_node> bp_debug_nodes(128);
 
     float camera_pitch = 0.0f, camera_yaw = 0.0f;
     glwx::Transform camera_trafo;
@@ -443,7 +443,7 @@ int main()
             glm::vec4(1.0f, 1.0f, 1.0f, 1.0f),
         };
 
-        const auto debug_nodes = broadphase.get_debug_nodes();
+        const auto debug_nodes = broadphase.dump_nodes();
         for (const auto& [aabb, depth] : get_aabbs(debug_nodes)) {
             const auto& color = aabb_colors[depth % aabb_colors.size()];
             debug_draw.aabb(color, vec3(aabb.min), vec3(aabb.max));

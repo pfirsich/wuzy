@@ -224,11 +224,11 @@ struct AabbTree {
         return { wuzy_aabb_tree_node_query_create(aabb_tree, alloc) };
     }
 
-    std::vector<wuzy_aabb_tree_debug_node> get_debug_nodes() const
+    std::vector<wuzy_aabb_tree_dump_node> dump_nodes() const
     {
-        const auto size = wuzy_aabb_tree_get_debug_nodes(aabb_tree, nullptr, 0);
-        std::vector<wuzy_aabb_tree_debug_node> nodes(size);
-        const auto num = wuzy_aabb_tree_get_debug_nodes(aabb_tree, nodes.data(), nodes.size());
+        const auto size = wuzy_aabb_tree_dump(aabb_tree, nullptr, 0);
+        std::vector<wuzy_aabb_tree_dump_node> nodes(size);
+        const auto num = wuzy_aabb_tree_dump(aabb_tree, nodes.data(), nodes.size());
         nodes.resize(num);
         return nodes;
     }
