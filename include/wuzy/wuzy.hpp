@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <optional>
 #include <span>
 #include <vector>
@@ -139,9 +140,28 @@ std::optional<wuzy_collision_result> get_collision(const Collider& a, const Coll
 struct AabbTree {
     wuzy_aabb_tree* aabb_tree;
 
+    static size_t count_leaves(wuzy_aabb_tree_init_node* node)
+    {
+        if (node->collider) {
+            return 1;
+        }
+        return count_leaves(node->left) + count_leaves(node->right);
+    }
+
     AabbTree(size_t max_num_leaves, wuzy_allocator* alloc = nullptr)
     {
         aabb_tree = wuzy_aabb_tree_create(max_num_leaves, alloc);
+    }
+
+    AabbTree(wuzy_aabb_tree_init_node* root_node, size_t max_num_leaves = 0,
+        wuzy_allocator* alloc = nullptr)
+    {
+        if (max_num_leaves == 0) {
+            max_num_leaves = count_leaves(root_node);
+        }
+        aabb_tree = wuzy_aabb_tree_create(max_num_leaves, alloc);
+        [[maybe_unused]] const auto res = wuzy_aabb_tree_init(aabb_tree, root_node);
+        assert(res);
     }
 
     ~AabbTree() { wuzy_aabb_tree_destroy(aabb_tree); }
