@@ -239,6 +239,14 @@ struct wuzy_aabb_tree_dump_node {
 size_t wuzy_aabb_tree_dump(
     const wuzy_aabb_tree* tree, wuzy_aabb_tree_dump_node* nodes, size_t max_num_nodes);
 
+typedef struct {
+    size_t num_nodes;
+    size_t num_colliders;
+    size_t max_num_nodes;
+} wuzy_aabb_tree_stats;
+
+void wuzy_aabb_tree_get_stats(const wuzy_aabb_tree* tree, wuzy_aabb_tree_stats* stats);
+
 typedef struct wuzy_aabb_tree_node_query wuzy_aabb_tree_node_query;
 
 // A query requires some storage that is likely too large for the stack and to avoid

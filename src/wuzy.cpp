@@ -1263,6 +1263,7 @@ struct AabbTree {
     size_t max_num_colliders;
     size_t max_num_nodes;
     size_t num_nodes = 0;
+    size_t num_colliders = 0;
     Node* nodes;
     size_t* free_list;
     size_t free_list_size = 0;
@@ -1292,6 +1293,9 @@ struct AabbTree {
         node->left = nullptr;
         node->right = nullptr;
         node->generation++;
+        if (node->collider) {
+            num_colliders--;
+        }
         assert(free_list_size < max_num_nodes);
         free_list[free_list_size] = static_cast<size_t>(node - nodes);
         free_list_size++;
@@ -1454,6 +1458,7 @@ Node* insert_node(AabbTree* tree, Node* parent, wuzy_aabb_tree_init_node* init_n
         node->bitmask = init_node->bitmask ? init_node->bitmask : static_cast<uint64_t>(-1);
         node->aabb = wuzy_collider_get_aabb(init_node->collider);
         node->parent = parent;
+        tree->num_colliders++;
     } else {
         assert(init_node->left && init_node->right);
         node->left = insert_node(tree, node, init_node->left);
@@ -1487,6 +1492,7 @@ EXPORT wuzy_aabb_tree_node wuzy_aabb_tree_insert(
         tree->free_node(node);
         return { 0 };
     }
+    tree->num_colliders++;
     return { tree->get_id(node) };
 }
 
@@ -1553,6 +1559,14 @@ EXPORT size_t wuzy_aabb_tree_dump(
     size_t num_nodes = 0;
     add_node(tree, tree->root, nullptr, nodes, &num_nodes, max_num_nodes);
     return num_nodes;
+}
+
+void wuzy_aabb_tree_get_stats(const wuzy_aabb_tree* wtree, wuzy_aabb_tree_stats* stats)
+{
+    auto tree = reinterpret_cast<const AabbTree*>(wtree);
+    stats->num_colliders = tree->num_colliders;
+    stats->num_nodes = tree->num_nodes;
+    stats->max_num_nodes = tree->max_num_nodes;
 }
 
 namespace {

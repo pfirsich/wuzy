@@ -340,6 +340,9 @@ int main()
     for (auto& collider : level_colliders) {
         broadphase.insert(collider);
     }
+    const auto stats = broadphase.get_stats();
+    fmt::println("colliders={}, nodes={}, max_nodes={}", stats.num_colliders, stats.num_nodes,
+        stats.max_num_nodes);
 
     glwx::Transform player_trafo;
     glm::vec3 player_velocity = glm::vec3(0.0f);

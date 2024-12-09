@@ -166,6 +166,13 @@ struct AabbTree {
 
     ~AabbTree() { wuzy_aabb_tree_destroy(aabb_tree); }
 
+    wuzy_aabb_tree_stats get_stats() const
+    {
+        wuzy_aabb_tree_stats stats;
+        wuzy_aabb_tree_get_stats(aabb_tree, &stats);
+        return stats;
+    }
+
     wuzy_aabb_tree_node insert(Collider& collider, uint64_t bitmask = 0)
     {
         return wuzy_aabb_tree_insert(aabb_tree, &collider.collider, bitmask);
