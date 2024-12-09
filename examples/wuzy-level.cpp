@@ -1,3 +1,4 @@
+#include <chrono>
 #include <set>
 #include <span>
 
@@ -232,9 +233,15 @@ bool move_player(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query
     // This is kind of racey, because the broadphase query depends on the transform of the
     // player collider, which is changed in the loop.
     // In a real game, you would do this totally differently (many possible ways)!
+    wuzy_query_debug debug = {};
+    bp_query.begin(collider.get_aabb(), 0, &debug);
+    const auto candidates = bp_query.all();
+    fmt::println("collision: nodes={}, bitmasks={}, aabbs={}, leaves={}, full={}",
+        debug.nodes_checked, debug.bitmask_checks_passed, debug.aabb_checks_passed,
+        debug.leaves_checked, debug.full_checks_passed);
+
     bool collision = false;
-    bp_query.begin(collider.get_aabb());
-    for (auto node : bp_query.all()) {
+    for (auto node : candidates) {
         const auto other_collider = broadphase.get_collider(node);
         if (other_collider == &collider) {
             continue;
@@ -445,7 +452,8 @@ int main()
 
         const auto ray_start = vec3(camera_trafo.getPosition());
         const auto ray_dir = vec3(camera_trafo.getForward());
-        const auto rc = bp_query.ray_cast(ray_start, ray_dir);
+        wuzy_query_debug debug = {};
+        const auto rc = bp_query.ray_cast(ray_start, ray_dir, 0, &debug);
         if (rc) {
             const auto [node, res] = *rc;
             const auto marker_pos = vec3(res.hit_position);
@@ -453,6 +461,10 @@ int main()
             debug_draw.arrow(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), marker_pos,
                 marker_pos + vec3(res.normal) * 0.2f);
         }
+
+        fmt::println("raycast: nodes={}, bitmasks={}, aabbs={}, leaves={}, full={}",
+            debug.nodes_checked, debug.bitmask_checks_passed, debug.aabb_checks_passed,
+            debug.leaves_checked, debug.full_checks_passed);
 
         window.swap();
     }
