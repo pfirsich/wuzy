@@ -157,13 +157,17 @@ std::vector<std::tuple<size_t, size_t, size_t>> to_wuzy(std::span<const size_t> 
     return ret;
 }
 
-void collect_aabbs(std::vector<std::pair<wuzy_aabb, uint32_t>>& aabbs,
-    const wuzy_aabb_tree_dump_node* node, uint32_t depth = 0)
+uint32_t collect_aabbs(
+    std::vector<std::pair<wuzy_aabb, uint32_t>>& aabbs, const wuzy_aabb_tree_dump_node* node)
 {
-    aabbs.push_back({ node->aabb, depth });
-    if (!node->collider) {
-        collect_aabbs(aabbs, node->left, depth + 1);
-        collect_aabbs(aabbs, node->right, depth + 1);
+    if (node->collider) {
+        aabbs.push_back({ node->aabb, 0 });
+        return 0;
+    } else {
+        const auto d1 = collect_aabbs(aabbs, node->left);
+        const auto d2 = collect_aabbs(aabbs, node->right);
+        aabbs.push_back({ node->aabb, (d1 > d2 ? d1 : d2) + 1 });
+        return aabbs.back().second;
     }
 }
 
@@ -426,8 +430,6 @@ int main()
                 draw_mesh(
                     triangle_mesh, color, texture, obstacle.trafo, view_matrix, projection_matrix);
             }
-            const auto aabb = obstacle.collider->get_aabb();
-            debug_draw.aabb(glm::vec4(1.0f), vec3(aabb.min), vec3(aabb.max));
         }
 
         const auto color = player_collision ? glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) : glm::vec4(1.0f);
@@ -444,9 +446,11 @@ int main()
         };
 
         const auto debug_nodes = broadphase.dump_nodes();
-        for (const auto& [aabb, depth] : get_aabbs(debug_nodes)) {
+        const auto aabbs = get_aabbs(debug_nodes);
+        for (const auto& [aabb, depth] : aabbs) {
             const auto& color = aabb_colors[depth % aabb_colors.size()];
-            debug_draw.aabb(color, vec3(aabb.min), vec3(aabb.max));
+            const auto height_offset = glm::vec3(0.0f, depth * 0.3f, 0.0f);
+            debug_draw.aabb(color, vec3(aabb.min), vec3(aabb.max) + height_offset);
         }
 
         const auto cam_pos = camera_trafo.getPosition();
