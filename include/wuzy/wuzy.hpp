@@ -204,14 +204,14 @@ struct AabbTree {
             }
         }
 
-        void begin(const wuzy_vec3& point, uint64_t bitmask = 0)
+        void begin(const wuzy_vec3& point, uint64_t bitmask = 0, wuzy_query_debug* debug = nullptr)
         {
-            wuzy_aabb_tree_node_query_point_begin(query, point, bitmask);
+            wuzy_aabb_tree_node_query_point_begin(query, point, bitmask, debug);
         }
 
-        void begin(const wuzy_aabb& aabb, uint64_t bitmask = 0)
+        void begin(const wuzy_aabb& aabb, uint64_t bitmask = 0, wuzy_query_debug* debug = nullptr)
         {
-            wuzy_aabb_tree_node_query_aabb_begin(query, &aabb, bitmask);
+            wuzy_aabb_tree_node_query_aabb_begin(query, &aabb, bitmask, debug);
         }
 
         std::optional<wuzy_aabb_tree_node> next()
@@ -234,11 +234,11 @@ struct AabbTree {
             return res;
         }
 
-        std::optional<wuzy_aabb_tree_ray_cast_result> ray_cast(
-            const wuzy_vec3& start, const wuzy_vec3& direction, uint64_t bitmask = 0)
+        std::optional<wuzy_aabb_tree_ray_cast_result> ray_cast(const wuzy_vec3& start,
+            const wuzy_vec3& direction, uint64_t bitmask = 0, wuzy_query_debug* debug = nullptr)
         {
             wuzy_aabb_tree_ray_cast_result res;
-            if (wuzy_aabb_tree_node_query_ray_cast(query, start, direction, bitmask, &res)) {
+            if (wuzy_aabb_tree_node_query_ray_cast(query, start, direction, bitmask, &res, debug)) {
                 return res;
             } else {
                 return std::nullopt;

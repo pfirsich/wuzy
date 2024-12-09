@@ -267,11 +267,13 @@ void wuzy_aabb_tree_node_query_destroy(wuzy_aabb_tree_node_query* query);
 // allowed implementing a point, aabb and ray cast query yourself, but it introduces overhead in the
 // common operations and I don't even think there is much of a use for it, so it's gone now.
 
-void wuzy_aabb_tree_node_query_point_begin(
-    wuzy_aabb_tree_node_query* query, wuzy_vec3 point, uint64_t bitmask);
+typedef struct wuzy_query_debug wuzy_query_debug;
 
-void wuzy_aabb_tree_node_query_aabb_begin(
-    wuzy_aabb_tree_node_query* query, const wuzy_aabb* aabb, uint64_t bitmask);
+void wuzy_aabb_tree_node_query_point_begin(
+    wuzy_aabb_tree_node_query* query, wuzy_vec3 point, uint64_t bitmask, wuzy_query_debug* debug);
+
+void wuzy_aabb_tree_node_query_aabb_begin(wuzy_aabb_tree_node_query* query, const wuzy_aabb* aabb,
+    uint64_t bitmask, wuzy_query_debug* debug);
 
 size_t wuzy_aabb_tree_node_query_next(
     wuzy_aabb_tree_node_query* query, wuzy_aabb_tree_node* nodes, size_t max_nodes);
@@ -282,7 +284,8 @@ typedef struct {
 } wuzy_aabb_tree_ray_cast_result;
 
 bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* query, wuzy_vec3 start,
-    wuzy_vec3 direction, uint64_t bitmask, wuzy_aabb_tree_ray_cast_result* result);
+    wuzy_vec3 direction, uint64_t bitmask, wuzy_aabb_tree_ray_cast_result* result,
+    wuzy_query_debug* debug);
 
 /*
 typedef struct {
@@ -368,6 +371,14 @@ struct wuzy_epa_debug {
 };
 
 void wuzy_epa_debug_free(wuzy_epa_debug* debug);
+
+struct wuzy_query_debug {
+    size_t nodes_checked;
+    size_t bitmask_checks_passed;
+    size_t aabb_checks_passed;
+    size_t leaves_checked;
+    size_t full_checks_passed;
+};
 
 #ifdef __cplusplus
 }

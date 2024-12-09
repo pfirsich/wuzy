@@ -1585,6 +1585,7 @@ struct NodeQuery {
         wuzy_vec3 point;
         wuzy_aabb aabb;
     } params;
+    wuzy_query_debug* debug;
 };
 }
 
@@ -1618,25 +1619,27 @@ EXPORT void wuzy_aabb_tree_node_query_destroy(wuzy_aabb_tree_node_query* wquery)
 }
 
 EXPORT void wuzy_aabb_tree_node_query_point_begin(
-    wuzy_aabb_tree_node_query* wquery, wuzy_vec3 point, uint64_t bitmask)
+    wuzy_aabb_tree_node_query* wquery, wuzy_vec3 point, uint64_t bitmask, wuzy_query_debug* debug)
 {
     auto query = reinterpret_cast<NodeQuery*>(wquery);
     query->bitmask = bitmask ? bitmask : static_cast<uint64_t>(-1);
     query->type = NodeQuery::Type::Point;
     query->params.point = point;
+    query->debug = debug;
     query->node_stack_size = 0;
     if (query->tree->root) {
         query->node_stack[query->node_stack_size++] = query->tree->root;
     }
 }
 
-EXPORT void wuzy_aabb_tree_node_query_aabb_begin(
-    wuzy_aabb_tree_node_query* wquery, const wuzy_aabb* aabb, uint64_t bitmask)
+EXPORT void wuzy_aabb_tree_node_query_aabb_begin(wuzy_aabb_tree_node_query* wquery,
+    const wuzy_aabb* aabb, uint64_t bitmask, wuzy_query_debug* debug)
 {
     auto query = reinterpret_cast<NodeQuery*>(wquery);
     query->bitmask = bitmask ? bitmask : static_cast<uint64_t>(-1);
     query->type = NodeQuery::Type::Aabb;
     query->params.aabb = *aabb;
+    query->debug = debug;
     query->node_stack_size = 0;
     if (query->tree->root) {
         query->node_stack[query->node_stack_size++] = query->tree->root;
@@ -1649,13 +1652,26 @@ size_t query_point_next(NodeQuery* query, wuzy_aabb_tree_node* nodes, size_t max
     size_t num_nodes = 0;
     while (query->node_stack_size && num_nodes < max_nodes) {
         auto node = query->node_stack[--query->node_stack_size];
+        if (query->debug) {
+            query->debug->nodes_checked++;
+        }
 
         if ((node->bitmask & query->bitmask) == 0) {
             continue;
         }
+        if (query->debug) {
+            query->debug->bitmask_checks_passed++;
+        }
 
         if (contains(node->aabb, query->params.point)) {
+            if (query->debug) {
+                query->debug->aabb_checks_passed++;
+            }
             if (node->is_leaf()) {
+                if (query->debug) {
+                    query->debug->leaves_checked++;
+                    query->debug->full_checks_passed++;
+                }
                 nodes[num_nodes++] = wuzy_aabb_tree_node { query->tree->get_id(node) };
             } else {
                 assert(query->node_stack_size + 2 <= query->node_stack_capacity);
@@ -1672,13 +1688,26 @@ size_t query_aabb_next(NodeQuery* query, wuzy_aabb_tree_node* nodes, size_t max_
     size_t num_nodes = 0;
     while (query->node_stack_size && num_nodes < max_nodes) {
         auto node = query->node_stack[--query->node_stack_size];
+        if (query->debug) {
+            query->debug->nodes_checked++;
+        }
 
         if ((node->bitmask & query->bitmask) == 0) {
             continue;
         }
+        if (query->debug) {
+            query->debug->bitmask_checks_passed++;
+        }
 
         if (overlap(node->aabb, query->params.aabb)) {
+            if (query->debug) {
+                query->debug->aabb_checks_passed++;
+            }
             if (node->is_leaf()) {
+                if (query->debug) {
+                    query->debug->leaves_checked++;
+                    query->debug->full_checks_passed++;
+                }
                 nodes[num_nodes++] = wuzy_aabb_tree_node { query->tree->get_id(node) };
             } else {
                 assert(query->node_stack_size + 2 <= query->node_stack_capacity);
@@ -1706,7 +1735,8 @@ EXPORT size_t wuzy_aabb_tree_node_query_next(
 }
 
 EXPORT bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* wquery, wuzy_vec3 start,
-    wuzy_vec3 direction, uint64_t bitmask, wuzy_aabb_tree_ray_cast_result* result)
+    wuzy_vec3 direction, uint64_t bitmask, wuzy_aabb_tree_ray_cast_result* result,
+    wuzy_query_debug* debug)
 {
     bitmask = bitmask ? bitmask : static_cast<uint64_t>(-1);
     auto query = reinterpret_cast<NodeQuery*>(wquery);
@@ -1719,17 +1749,32 @@ EXPORT bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* wquery
     wuzy_ray_cast_result temp_res;
     while (query->node_stack_size) {
         auto node = query->node_stack[--query->node_stack_size];
+        if (debug) {
+            debug->nodes_checked++;
+        }
 
         if ((node->bitmask & bitmask) == 0) {
             continue;
         }
+        if (debug) {
+            debug->bitmask_checks_passed++;
+        }
 
         const auto aabb_hit = ray_cast(node->aabb, start, direction, &temp_res);
         if (aabb_hit && (!hit || temp_res.t < result->result.t)) {
+            if (debug) {
+                debug->aabb_checks_passed++;
+            }
             if (node->is_leaf()) {
+                if (debug) {
+                    debug->leaves_checked++;
+                }
                 const auto collider_hit
                     = wuzy_collider_ray_cast(node->collider, start, direction, &temp_res);
                 if (collider_hit && (!hit || temp_res.t < result->result.t)) {
+                    if (debug) {
+                        debug->full_checks_passed++;
+                    }
                     result->node = wuzy_aabb_tree_node { query->tree->get_id(node) };
                     result->result = temp_res;
                     hit = true;
