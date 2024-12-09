@@ -104,7 +104,7 @@ struct ConvexPolyhedronCollider : public Collider {
     }
 };
 
-std::optional<wuzy_simplex3d> gjk(
+inline std::optional<wuzy_simplex3d> gjk(
     const Collider& a, const Collider& b, wuzy_gjk_debug* debug = nullptr)
 {
     wuzy_simplex3d res;
@@ -115,18 +115,18 @@ std::optional<wuzy_simplex3d> gjk(
     }
 }
 
-bool test_collision(const Collider& a, const Collider& b, wuzy_gjk_debug* debug = nullptr)
+inline bool test_collision(const Collider& a, const Collider& b, wuzy_gjk_debug* debug = nullptr)
 {
     return wuzy_test_collision(&a.collider, &b.collider, debug);
 }
 
-wuzy_collision_result epa(const Collider& a, const Collider& b, const wuzy_simplex3d& simplex,
-    wuzy_epa_debug* debug = nullptr)
+inline wuzy_collision_result epa(const Collider& a, const Collider& b,
+    const wuzy_simplex3d& simplex, wuzy_epa_debug* debug = nullptr)
 {
     return wuzy_epa(&a.collider, &b.collider, &simplex, debug);
 }
 
-std::optional<wuzy_collision_result> get_collision(const Collider& a, const Collider& b,
+inline std::optional<wuzy_collision_result> get_collision(const Collider& a, const Collider& b,
     wuzy_gjk_debug* gjk_debug = nullptr, wuzy_epa_debug* epa_debug = nullptr)
 {
     wuzy_collision_result res;

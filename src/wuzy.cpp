@@ -115,7 +115,7 @@ wuzy_vec3 normalize(const wuzy_vec3& v)
     return wuzy_vec3 { v.x / len, v.y / len, v.z / len };
 }
 
-bool is_finite(const wuzy_vec3& v)
+[[maybe_unused]] bool is_finite(const wuzy_vec3& v)
 {
     return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
 }
@@ -194,7 +194,7 @@ wuzy_aabb combine(const wuzy_aabb& a, const wuzy_aabb& b)
     };
 }
 
-float volume(const wuzy_aabb& aabb)
+[[maybe_unused]] float volume(const wuzy_aabb& aabb)
 {
     const auto s = sub(aabb.max, aabb.min);
     return s.x * s.y * s.z;
@@ -817,6 +817,7 @@ NextSimplexResult next_simplex(const wuzy_simplex3d& simplex, const wuzy_vec3& d
         return tetrahedron(simplex, direction);
     default:
         assert(false && "Invalid number of points in simplex");
+        std::abort();
     }
 }
 
