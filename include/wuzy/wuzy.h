@@ -192,7 +192,7 @@ void wuzy_aabb_tree_destroy(wuzy_aabb_tree* tree);
 typedef struct wuzy_aabb_tree_init_node wuzy_aabb_tree_init_node;
 
 struct wuzy_aabb_tree_init_node {
-    wuzy_aabb_tree_node id; // Will be set by init
+    wuzy_aabb_tree_node id; // Will be set by wuzy_aabb_tree_init
     // for internal nodes, left and right must be non-null and collider must be null
     // for leaf nodes, left and right must be null and collider must be non-null
     wuzy_collider* collider;
@@ -202,8 +202,8 @@ struct wuzy_aabb_tree_init_node {
 };
 
 // Building these trees is not free, so you might want to dump then at asset compile time
-// (wuzy_aabb_tree_dump) and then use this function to load it back at load time using this
-// function. This function asserts that the tree is empty.
+// (wuzy_aabb_tree_dump) and then load it back at load time using this function.
+// This function asserts that the tree is empty.
 // You may also build even more optimized trees offline and load them in here.
 bool wuzy_aabb_tree_init(wuzy_aabb_tree* tree, wuzy_aabb_tree_init_node* root_node);
 
