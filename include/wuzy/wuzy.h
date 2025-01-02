@@ -207,6 +207,11 @@ struct wuzy_aabb_tree_init_node {
 // You may also build even more optimized trees offline and load them in here.
 bool wuzy_aabb_tree_init(wuzy_aabb_tree* tree, wuzy_aabb_tree_init_node* root_node);
 
+// This is very expensive (O(n^3)!), but should yield a near-optimal tree.
+// You likely want to do this offline and then use wuzy_aabb_tree_dump_tree and wuzy_aabb_tree_init.
+// Simply inserting repeatedly is actually not that bad and yields fairly reasonable trees.
+void wuzy_aabb_tree_rebuild(wuzy_aabb_tree* tree);
+
 // If 0 is passed for the bitmask, it is set to 0xffff'ffff'ffff'ffff.
 // Will return invalid node (id = 0) if the node could not be inserted (maximum number of nodes
 // reached).

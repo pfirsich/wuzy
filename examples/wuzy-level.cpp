@@ -289,6 +289,30 @@ std::vector<std::pair<wuzy_aabb, uint32_t>> get_aabbs(
     return aabbs;
 }
 
+void print_node(const wuzy_aabb_tree_dump_node& node, size_t indent = 0)
+{
+    const auto indent_str = std::string(indent * 2, ' ');
+    auto vol = [](const wuzy_aabb& b) {
+        const auto ext = vec3(b.max) - vec3(b.min);
+        return ext.x * ext.y * ext.z;
+    };
+    fmt::println(
+        "{}{} ({}) (vol: {})", indent_str, node.id.id, fmt::ptr(node.collider), vol(node.aabb));
+    if (node.left) {
+        print_node(*node.left, indent + 1);
+    }
+    if (node.right) {
+        print_node(*node.right, indent + 1);
+    }
+}
+
+void print_tree(const wuzy::AabbTree& tree)
+{
+    const auto debug_nodes = tree.dump_nodes();
+    assert(!debug_nodes[0].parent); // root
+    print_node(debug_nodes[0]);
+}
+
 void draw_broadphase_debug(wuzy::AabbTree& broadphase, DebugDraw& debug_draw)
 {
     static const std::vector<glm::vec4> aabb_colors {
@@ -347,6 +371,8 @@ int main()
     for (auto& collider : level_colliders) {
         broadphase.insert(collider);
     }
+    print_tree(broadphase);
+
     const auto stats = broadphase.get_stats();
     fmt::println("colliders={}, nodes={}, max_nodes={}", stats.num_colliders, stats.num_nodes,
         stats.max_num_nodes);

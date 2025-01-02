@@ -173,6 +173,8 @@ struct AabbTree {
         return stats;
     }
 
+    void rebuild() { wuzy_aabb_tree_rebuild(aabb_tree); }
+
     wuzy_aabb_tree_node insert(Collider& collider, uint64_t bitmask = 0)
     {
         return wuzy_aabb_tree_insert(aabb_tree, &collider.collider, bitmask);
