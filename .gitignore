@@ -8,3 +8,5 @@ untracked/
 config.joml
 **/__pycache__
 *.*~
+.aider*
+.env
