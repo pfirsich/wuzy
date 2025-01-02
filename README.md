@@ -36,10 +36,9 @@ If you need collisions with meshes, like levels, just create a separate collider
 
 # TODO:
 
-- Implement `wuzy_aabb_tree_init`, `wuzy_abb_tree_rebuild`.
+- High Level API
 - `wuzy_aabb_tree_update_node` with flags (rebuild subtree, rotate, re-insert)
 - Fast effective bvh updates for animated scenes
-- High Level API
 - AABB Tree Rebalancing, bulk-insert of nodes that balances tree (for levels): https://box2d.org/files/ErinCatto_DynamicBVH_Full.pdf
 - Tests!
 - Capsule Shapes - The support function is easy, but ray casting is not.

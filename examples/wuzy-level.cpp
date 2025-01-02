@@ -371,7 +371,12 @@ int main()
     for (auto& collider : level_colliders) {
         broadphase.insert(collider);
     }
+    const auto start = std::chrono::high_resolution_clock::now();
+    broadphase.rebuild();
+    const auto delta = std::chrono::high_resolution_clock::now() - start;
     print_tree(broadphase);
+    fmt::println(
+        "rebuild time: {}us", std::chrono::duration_cast<std::chrono::microseconds>(delta).count());
 
     const auto stats = broadphase.get_stats();
     fmt::println("colliders={}, nodes={}, max_nodes={}", stats.num_colliders, stats.num_nodes,

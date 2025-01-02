@@ -8,6 +8,7 @@
 #include <cstring>
 #include <span>
 #include <tuple>
+#include <vector>
 
 #define EXPORT extern "C"
 
@@ -1476,6 +1477,92 @@ EXPORT bool wuzy_aabb_tree_init(wuzy_aabb_tree* wtree, wuzy_aabb_tree_init_node*
     assert(tree->num_nodes == 0);
     tree->root = insert_node(tree, nullptr, root_node);
     return tree->root;
+}
+
+EXPORT void wuzy_aabb_tree_rebuild(wuzy_aabb_tree* wtree)
+{
+    // This rebuilds the tree bottom-up.
+    // I tried top-down as well, but using many different strategies (lowest total volume, lowest
+    // total surface area, median split) I could not get a tree that was better than the one you get
+    // by simply inserting in a loop.
+    // lowst total volume and lowest total surface area (SAH) have the problem that with large
+    // polygons (roughly the size of the overall AABB), you cannot split without getting a larger
+    // cost (because you get overlap). In that case you often get just a single node split off and
+    // you end up with (roughly) a linear spine. Also triangles are often axis aligned (walls,
+    // floors, ceilings) so that their AABB has volume 0, which messes up everything and gives bad
+    // results as well.
+    // When you use a median split you get a tree that looks very nice on paper (perfectly
+    // balanced), but the two branches at each node are not visited with equal probability, so you
+    // in fact end up with trees that require more checks than the default (repeated insertion)
+    // tree.
+    // This bottom-up approach is the only one I found that actually produces better trees (about
+    // 30% fewer checks in my tests).
+
+    // TODO: Some optimization ideas for the future: We could use tree->nodes instead of a nodes
+    // vector then we know we don't have gaps and we don't have a pointer indirection, but we cannot
+    // move elements around and we need to have a check like `if(!node->parent)` to determine if a
+    // node is in the current working set inside the loop that calculates the cost. It's hard to
+    // tell whether this will improve things.
+
+    auto tree = reinterpret_cast<AabbTree*>(wtree);
+    std::vector<Node*> nodes;
+    nodes.reserve(tree->num_nodes);
+    for (size_t i = 0; i < tree->num_nodes; ++i) {
+        if (tree->nodes[i].is_leaf()) {
+            nodes.push_back(&tree->nodes[i]);
+        } else {
+            // free all internal nodes
+            tree->free_node(&tree->nodes[i]);
+        }
+    }
+
+    while (nodes.size() > 1) {
+        // We look at all the nodes and find the two that are the best to merge and then put that
+        // parent into the nodes to merge and remove the children. We repeat until a single node is
+        // left.
+
+        // It would be nice to not repeat these calculations for every pair all the time, but
+        // storing these is not that simple.
+        // I tried using a min-heap for this, but you need to do a lot of book keeping to remove the
+        // pairs (or to skip them, I tried both). Just popping an element can be expensive if the
+        // heap is large.
+        // In the end using a heap here is much slower (~2x) for a tree with 500 tris.
+        // Of course usually levels are much larger and the heap should improve performance if N is
+        // large, but since you need to store a heap of *pairs* of nodes, you have another problem.
+        // With just 10k tris you need 2G of memory just for the heap. And with 100k tris
+        // (reasonable and not even that large), you need 200G, which is impossible on most
+        // machines. So this naive implementation is actually the best I can do right now.
+        size_t best_i = 0;
+        size_t best_j = 1;
+        float best_cost = FLT_MAX;
+        for (size_t i = 0; i < nodes.size(); ++i) {
+            for (size_t j = i + 1; j < nodes.size(); ++j) {
+                // TODO: Reconsider `area` here, it seems to yield better trees sometimes.
+                const auto cost = volume(combine(nodes[i]->aabb, nodes[j]->aabb));
+                if (cost < best_cost) {
+                    best_cost = cost;
+                    best_i = i;
+                    best_j = j;
+                }
+            }
+        }
+
+        auto parent = tree->get_new_node();
+        parent->left = nodes[best_i];
+        nodes[best_i]->parent = parent;
+        parent->right = nodes[best_j];
+        nodes[best_j]->parent = parent;
+        parent->update_from_children();
+
+        assert(best_j > best_i);
+        // j might be last, so we start with it
+        std::swap(nodes[best_j], nodes[nodes.size() - 1]);
+        nodes.pop_back();
+        std::swap(nodes[best_i], nodes[nodes.size() - 1]);
+        nodes.pop_back();
+        nodes.push_back(parent);
+    }
+    tree->root = nodes[0];
 }
 
 EXPORT wuzy_aabb_tree_node wuzy_aabb_tree_insert(

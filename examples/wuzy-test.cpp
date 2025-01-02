@@ -297,6 +297,7 @@ int main()
         obstacles.push_back(Obstacle { std::move(trafo), std::move(collider), bp_node, type });
         obstacle_idx_map.emplace(bp_node.id, i);
     }
+    broadphase.rebuild();
 
     glwx::Transform player_trafo;
     bool player_collision = false;
