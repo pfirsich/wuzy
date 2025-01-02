@@ -51,6 +51,7 @@ If you need collisions with meshes, like levels, just create a separate collider
 - Calculate closest distance with GJK result: (http://allenchou.net/2013/12/game-physics-collision-detection-gjk/ - "Extra" section)
 - Enlarged AABBs - store enlarged AABBs in the AABB Tree and only update a leaf if they actual ("tight") AABB moves outside of the enlarged AABB, so moving objects don't require a tree update every frame (you can do this with quick updates now).
 - Hill Climbing for Extreme Vertices (Real-Time Collision Detection): http://allenchou.net/2014/02/game-physics-implementing-support-function-for-polyhedrons-using-half-edges/ - It makes a lot of sense algorithmically, but I think it's very cache-unfriendly and you need very large polyhedra for this to make sense (haven't tried it though).
+- Get rid of the query abstraction and just have a single internal buffer per tree that's enough for one concurrent query? Maybe I can come up with a nice API that allows concurrent queries AND a simple API that uses the internal buffer.
 - Heightmap Terrains
 - [Minkowski Portal Refinement](https://en.wikipedia.org/wiki/Minkowski_Portal_Refinement) / [XenoCollide](http://xenocollide.snethen.com/)
 - Better Collision Resolution: http://media.steampowered.com/apps/valve/2015/DirkGregorius_Contacts.pdf
