@@ -179,6 +179,16 @@ struct AabbTree {
         return stats;
     }
 
+    std::vector<wuzy_aabb_tree_node> build(
+        std::span<Collider*> colliders, std::span<uint64_t> bitmasks = {})
+    {
+        assert(bitmasks.empty() || colliders.size() == bitmasks.size());
+        std::vector<wuzy_aabb_tree_node> nodes(colliders.size(), wuzy_aabb_tree_node { 0 });
+        wuzy_aabb_tree_build(aabb_tree, reinterpret_cast<wuzy_collider**>(colliders.data()),
+            bitmasks.size() ? bitmasks.data() : nullptr, colliders.size(), nodes.data());
+        return nodes;
+    }
+
     void rebuild() { wuzy_aabb_tree_rebuild(aabb_tree); }
 
     wuzy_aabb_tree_node insert(Collider& collider, uint64_t bitmask = 0)

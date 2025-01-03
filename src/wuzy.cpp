@@ -1486,6 +1486,26 @@ EXPORT bool wuzy_aabb_tree_init(wuzy_aabb_tree* wtree, wuzy_aabb_tree_init_node*
     return tree->root;
 }
 
+EXPORT void wuzy_aabb_tree_build(wuzy_aabb_tree* wtree, wuzy_collider* const* colliders,
+    const uint64_t* bitmasks, size_t num_colliders, wuzy_aabb_tree_node* nodes)
+{
+    // Just add a bunch of collider nodes, just enough so that rebuild will work
+    auto tree = reinterpret_cast<AabbTree*>(wtree);
+    assert(tree->num_nodes == 0);
+    assert(tree->max_num_colliders <= num_colliders);
+    for (size_t i = 0; i < num_colliders; ++i) {
+        auto node = tree->get_new_node();
+        assert(node);
+        node->collider = colliders[i];
+        node->aabb = wuzy_collider_get_aabb(node->collider);
+        node->bitmask = (bitmasks && bitmasks[i]) ? bitmasks[i] : static_cast<uint64_t>(-1);
+        nodes[i].id = tree->get_id(node);
+        tree->num_colliders++;
+    }
+
+    wuzy_aabb_tree_rebuild(wtree);
+}
+
 EXPORT void wuzy_aabb_tree_rebuild(wuzy_aabb_tree* wtree)
 {
     // This rebuilds the tree bottom-up.

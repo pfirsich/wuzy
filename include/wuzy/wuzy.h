@@ -207,6 +207,13 @@ struct wuzy_aabb_tree_init_node {
 // You may also build even more optimized trees offline and load them in here.
 bool wuzy_aabb_tree_init(wuzy_aabb_tree* tree, wuzy_aabb_tree_init_node* root_node);
 
+// Instead of inserting a bunch of colliders and then rebuilding to improve the tree, you can use
+// this function to build a new tree from many colliders.
+// This function asserts that the tree is empty.
+// `bitmasks` may be nullptr in which case all bitmasks will be -1.
+void wuzy_aabb_tree_build(wuzy_aabb_tree* tree, wuzy_collider* const* colliders,
+    const uint64_t* bitmasks, size_t num_colliders, wuzy_aabb_tree_node* nodes);
+
 // This is very expensive (O(n^3)!), but should yield a near-optimal tree.
 // You likely want to do this offline and then use wuzy_aabb_tree_dump_tree and wuzy_aabb_tree_init.
 // Note that simply inserting repeatedly is actually not that bad and yields fairly reasonable
