@@ -222,10 +222,22 @@ wuzy_aabb_tree_node wuzy_aabb_tree_insert(
 
 wuzy_collider* wuzy_aabb_tree_get_collider(wuzy_aabb_tree* tree, wuzy_aabb_tree_node node);
 
+typedef enum {
+    // The default is REINSERT.
+    WUZY_AABB_TREE_UPDATE_FLAGS_DEFAULT = 0,
+    // REINSERT will remove the node and then find a new, good place for it.
+    WUZY_AABB_TREE_UPDATE_FLAGS_REINSERT,
+    // REFIT will simply update the nodes AABB/bitmask and its parents. This is much quicker than
+    // reinsert, but yields a much worse tree.
+    // This can be used to implement something like enlarged AABBs.
+    WUZY_AABB_TREE_UPDATE_FLAGS_REFIT,
+} wuzy_aabb_tree_update_mode;
+
 // This will compute the aabb of collider associated with this node again and update the tree
 // accordingly. Will return true if the given node exists (in which case it will be update) and
 // false if not. If 0 is passed for the bitmask, it is not changed.
-bool wuzy_aabb_tree_update(wuzy_aabb_tree* tree, wuzy_aabb_tree_node node, uint64_t bitmask);
+bool wuzy_aabb_tree_update(wuzy_aabb_tree* tree, wuzy_aabb_tree_node node, uint64_t bitmask,
+    wuzy_aabb_tree_update_mode mode);
 
 // Will return whether the given node existed before removal.
 bool wuzy_aabb_tree_remove(wuzy_aabb_tree* tree, wuzy_aabb_tree_node node);

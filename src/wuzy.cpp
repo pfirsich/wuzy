@@ -1258,6 +1258,13 @@ struct Node {
             right = new_child;
         }
     }
+
+    void refit()
+    {
+        for (auto p = parent; p; p = p->parent) {
+            p->update_from_children();
+        }
+    }
 };
 
 struct AabbTree {
@@ -1591,19 +1598,28 @@ EXPORT wuzy_collider* wuzy_aabb_tree_get_collider(wuzy_aabb_tree* wtree, wuzy_aa
     return node ? node->collider : nullptr;
 }
 
-EXPORT bool wuzy_aabb_tree_update(
-    wuzy_aabb_tree* wtree, wuzy_aabb_tree_node wnode, uint64_t bitmask)
+EXPORT bool wuzy_aabb_tree_update(wuzy_aabb_tree* wtree, wuzy_aabb_tree_node wnode,
+    uint64_t bitmask, wuzy_aabb_tree_update_mode mode)
 {
     auto tree = reinterpret_cast<AabbTree*>(wtree);
     auto node = tree->get_node(wnode.id);
     if (!node) {
         return false;
     }
-    tree->remove(node);
     node->aabb = wuzy_collider_get_aabb(node->collider);
     node->bitmask = bitmask ? bitmask : node->bitmask;
-    tree->insert(node, tree->root); // We ignore the return, because it should have worked
-    return true;
+    switch (mode) {
+    case WUZY_AABB_TREE_UPDATE_FLAGS_DEFAULT:
+    case WUZY_AABB_TREE_UPDATE_FLAGS_REINSERT:
+        tree->remove(node);
+        tree->insert(node, tree->root); // We ignore the return, because it should have worked
+        return true;
+    case WUZY_AABB_TREE_UPDATE_FLAGS_REFIT:
+        node->refit();
+        return true;
+    default:
+        return false;
+    }
 }
 
 EXPORT bool wuzy_aabb_tree_remove(wuzy_aabb_tree* wtree, wuzy_aabb_tree_node wnode)

@@ -138,6 +138,12 @@ inline std::optional<wuzy_collision_result> get_collision(const Collider& a, con
 }
 
 struct AabbTree {
+    enum class UpdateMode {
+        Default = WUZY_AABB_TREE_UPDATE_FLAGS_DEFAULT,
+        Reinsert = WUZY_AABB_TREE_UPDATE_FLAGS_REINSERT,
+        Refit = WUZY_AABB_TREE_UPDATE_FLAGS_REFIT,
+    };
+
     wuzy_aabb_tree* aabb_tree;
 
     static size_t count_leaves(wuzy_aabb_tree_init_node* node)
@@ -180,9 +186,11 @@ struct AabbTree {
         return wuzy_aabb_tree_insert(aabb_tree, &collider.collider, bitmask);
     }
 
-    bool update(wuzy_aabb_tree_node node, uint64_t bitmask = 0)
+    bool update(
+        wuzy_aabb_tree_node node, uint64_t bitmask = 0, UpdateMode mode = UpdateMode::Default)
     {
-        return wuzy_aabb_tree_update(aabb_tree, node, bitmask);
+        return wuzy_aabb_tree_update(
+            aabb_tree, node, bitmask, static_cast<wuzy_aabb_tree_update_mode>(mode));
     }
 
     Collider* get_collider(wuzy_aabb_tree_node node)
