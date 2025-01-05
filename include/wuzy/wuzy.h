@@ -169,7 +169,10 @@ bool wuzy_get_collision(const wuzy_collider* a, const wuzy_collider* b,
 // AABB Tree
 
 typedef struct {
-    uint32_t id; // 0 is invalid node
+    // These ids are u64s, but they will not exceed 48 bits (16 bit generation, 32 bit index), so
+    // they can fit into double precision floats, particularly to allow easy integration with Lua.
+    // 0 represents an invalid node.
+    uint64_t id;
 } wuzy_aabb_tree_node;
 
 typedef struct wuzy_aabb_tree wuzy_aabb_tree;

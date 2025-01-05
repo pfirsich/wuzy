@@ -1214,23 +1214,28 @@ EXPORT bool wuzy_get_collision(const wuzy_collider* a, const wuzy_collider* b,
 }
 
 namespace {
-uint32_t id_get_idx(uint32_t id)
+// To change the Id layout, only the following typedefs and three functions should be changed.
+using IdType = decltype(wuzy_aabb_tree_node::id);
+using GenerationType = uint16_t;
+using IndexType = uint32_t;
+
+IndexType id_get_idx(IdType id)
 {
-    return id & 0xFFFF;
+    return static_cast<IndexType>(id & 0xFFFFFFFF);
 }
 
-uint32_t id_get_gen(uint32_t id)
+GenerationType id_get_gen(IdType id)
 {
-    return id >> 16;
+    return static_cast<GenerationType>(id >> 32);
 }
 
-uint32_t id_combine(uint32_t idx, uint32_t gen)
+IdType id_combine(uint32_t idx, uint32_t gen)
 {
-    return (gen << 16) | idx;
+    return static_cast<IdType>(gen) << 32 | idx;
 }
 
 struct Node {
-    uint16_t generation = 1;
+    GenerationType generation = 1;
 
     wuzy_collider* collider = nullptr;
     wuzy_aabb aabb;
@@ -1397,13 +1402,13 @@ struct AabbTree {
         }
     }
 
-    uint32_t get_id(Node* node) const
+    IdType get_id(Node* node) const
     {
         const auto idx = static_cast<uint32_t>(node - nodes);
         return id_combine(idx, nodes[idx].generation);
     }
 
-    Node* get_node(uint32_t id) const
+    Node* get_node(IdType id) const
     {
         const auto idx = id_get_idx(id);
         const auto gen = id_get_gen(id);
