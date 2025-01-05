@@ -254,12 +254,15 @@ struct AabbTree {
             return res;
         }
 
-        std::optional<wuzy_aabb_tree_ray_cast_result> ray_cast(const wuzy_vec3& start,
-            const wuzy_vec3& direction, uint64_t bitmask = 0, wuzy_query_debug* debug = nullptr)
+        std::optional<std::pair<wuzy_aabb_tree_node, wuzy_ray_cast_result>> ray_cast(
+            const wuzy_vec3& start, const wuzy_vec3& direction, uint64_t bitmask = 0,
+            wuzy_query_debug* debug = nullptr)
         {
-            wuzy_aabb_tree_ray_cast_result res;
-            if (wuzy_aabb_tree_node_query_ray_cast(query, start, direction, bitmask, &res, debug)) {
-                return res;
+            wuzy_aabb_tree_node node;
+            wuzy_ray_cast_result res;
+            if (wuzy_aabb_tree_node_query_ray_cast(
+                    query, start, direction, bitmask, &node, &res, debug)) {
+                return std::pair { node, res };
             } else {
                 return std::nullopt;
             }

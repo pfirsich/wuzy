@@ -304,14 +304,12 @@ void wuzy_aabb_tree_node_query_aabb_begin(wuzy_aabb_tree_node_query* query, cons
 size_t wuzy_aabb_tree_node_query_next(
     wuzy_aabb_tree_node_query* query, wuzy_aabb_tree_node* nodes, size_t max_nodes);
 
-typedef struct {
-    wuzy_aabb_tree_node node;
-    wuzy_ray_cast_result result;
-} wuzy_aabb_tree_ray_cast_result;
+// Since a ray cast only has a single result, this function doesn't require a separate _begin and
+// _next.
 
 bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* query, wuzy_vec3 start,
-    wuzy_vec3 direction, uint64_t bitmask, wuzy_aabb_tree_ray_cast_result* result,
-    wuzy_query_debug* debug);
+    wuzy_vec3 direction, uint64_t bitmask, wuzy_aabb_tree_node* hit_node,
+    wuzy_ray_cast_result* result, wuzy_query_debug* debug);
 
 /*
 typedef struct {

@@ -187,7 +187,7 @@ bool move_player(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query
     const auto ray_start = vec3(trafo.getPosition());
     const auto ray_dir = wuzy_vec3 { 0.0f, -1.0f, 0.0f };
     const auto rc = bp_query.ray_cast(ray_start, ray_dir);
-    const auto on_ground = rc && rc->result.t < 0.71f; // kind of controls walkable slope height
+    const auto on_ground = rc && rc->second.t < 0.71f; // kind of controls walkable slope height
     if (on_ground) {
         if (velocity.y < 0.0f) {
             velocity.y = 0.0f;

@@ -1858,8 +1858,8 @@ EXPORT size_t wuzy_aabb_tree_node_query_next(
 }
 
 EXPORT bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* wquery, wuzy_vec3 start,
-    wuzy_vec3 direction, uint64_t bitmask, wuzy_aabb_tree_ray_cast_result* result,
-    wuzy_query_debug* debug)
+    wuzy_vec3 direction, uint64_t bitmask, wuzy_aabb_tree_node* hit_node,
+    wuzy_ray_cast_result* result, wuzy_query_debug* debug)
 {
     bitmask = bitmask ? bitmask : static_cast<uint64_t>(-1);
     auto query = reinterpret_cast<NodeQuery*>(wquery);
@@ -1869,6 +1869,7 @@ EXPORT bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* wquery
     }
 
     bool hit = false;
+    hit_node->id = 0;
     wuzy_ray_cast_result temp_res;
     while (query->node_stack_size) {
         auto node = query->node_stack[--query->node_stack_size];
@@ -1884,7 +1885,7 @@ EXPORT bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* wquery
         }
 
         const auto aabb_hit = ray_cast(node->aabb, start, direction, &temp_res);
-        if (aabb_hit && (!hit || temp_res.t < result->result.t)) {
+        if (aabb_hit && (!hit || temp_res.t < result->t)) {
             if (debug) {
                 debug->aabb_checks_passed++;
             }
@@ -1894,12 +1895,12 @@ EXPORT bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* wquery
                 }
                 const auto collider_hit
                     = wuzy_collider_ray_cast(node->collider, start, direction, &temp_res);
-                if (collider_hit && (!hit || temp_res.t < result->result.t)) {
+                if (collider_hit && (!hit || temp_res.t < result->t)) {
                     if (debug) {
                         debug->full_checks_passed++;
                     }
-                    result->node = wuzy_aabb_tree_node { query->tree->get_id(node) };
-                    result->result = temp_res;
+                    hit_node->id = query->tree->get_id(node);
+                    *result = temp_res;
                     hit = true;
                 }
             } else {
