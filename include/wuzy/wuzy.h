@@ -9,6 +9,11 @@ extern "C" {
 #include <stdint.h>
 
 /* General
+## Allocations
+No function here allocates, unless explicitly stated or unless it takes a wuzy_allocator argument.
+This is by design, so you can manage objects on your own and ideally you only have to
+allocate at initialization time.
+You may always pass nullptr as a wuzy_allocator, in which case malloc will be used.
 
 ## Thread Safety
 If a function takes a non-const pointer, it might mutate the referenced object. There is no locking
@@ -289,7 +294,8 @@ wuzy_aabb_tree_node_query* wuzy_aabb_tree_node_query_create(
 void wuzy_aabb_tree_node_query_destroy(wuzy_aabb_tree_node_query* query);
 
 // These are supposed to implement iterators. You start a query with _begin and then call _next
-// repeatedly (even with max_nodes = 1) until it returns 0 results.
+// repeatedly (even with max_nodes = 1) until it returns less than max_nodes.
+// It's perfectly fine to _begin a query that's not finished yet.
 // The value returned is the number of results filled into the out parameter.
 
 // There was a generic begin function which took a aabb_test and a collider_test callback which
