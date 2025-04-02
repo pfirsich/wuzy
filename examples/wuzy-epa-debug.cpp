@@ -13,21 +13,9 @@
 using namespace std::string_literals;
 using namespace wuzy;
 
-glm::vec3 vec3(const wuzy_vec3& v)
+std::string str(const float v[3])
 {
-    return glm::vec3(v.x, v.y, v.z);
-}
-
-wuzy_mat4 mat4(const glm::mat4& m)
-{
-    wuzy_mat4 r;
-    std::memcpy(&r.cols[0], &m[0][0], sizeof(float) * 16);
-    return r;
-}
-
-std::string str(const wuzy_vec3& v)
-{
-    return fmt::format("{{{}, {}, {}}}", v.x, v.y, v.z);
+    return fmt::format("{{{}, {}, {}}}", v[0], v[1], v[2]);
 }
 
 void print(const wuzy_epa_debug& debug, size_t it_idx)
@@ -38,10 +26,10 @@ void print(const wuzy_epa_debug& debug, size_t it_idx)
     const auto idx = std::min(it_idx, debug.num_iterations - 1);
     fmt::print("iteration {}\n", idx);
     const auto& it = debug.iterations[idx];
-    const auto v = std::span(it.polytope_vertices, it.num_polytope_vertices);
+    const auto v = it.polytope_vertices;
     fmt::print("vertices ({}):\n", it.num_polytope_vertices);
     for (size_t i = 0; i < it.num_polytope_vertices; ++i) {
-        fmt::print("{}: {}\n", i, str(v[i]));
+        fmt::print("{}: {}\n", i, str(v + i * 3));
     }
     fmt::print("faces ({}):\n", it.num_polytope_faces);
     for (const auto& face : std::span(it.polytope_faces, it.num_polytope_faces)) {
@@ -114,29 +102,31 @@ int main()
     const auto sphere_radius = 0.5f;
 
     wuzy::SphereCollider collider_a(sphere_radius);
-    const wuzy_mat4 transform_a {
-        {
-            wuzy_vec4 { .x = 0.645449042f, .y = 0.0f, .z = 0.763803363f, .w = 0.0f },
-            wuzy_vec4 { .x = 0.13072744f, .y = 0.985244393f, .z = -0.110470697f, .w = 0.0f },
-            wuzy_vec4 { .x = -0.752532959f, .y = 0.171153262f, .z = 0.635925055f, .w = 0.0f },
-            wuzy_vec4 { .x = 2.2353394f, .y = -2.8240099f, .z = 0.950788021f, .w = 1.0f },
-        },
+    const float transform_a[16] = {
+        // clang-format off
+         0.645449042f,   0.0f,           0.763803363f,  0.0f ,
+         0.13072744f,    0.985244393f,  -0.110470697f,  0.0f ,
+        -0.752532959f,   0.171153262f,   0.635925055f,  0.0f ,
+         2.2353394f,    -2.8240099f,     0.950788021f,  1.0f ,
+        // clang-format on
     };
     collider_a.set_transform(transform_a);
 
-    const wuzy_vec3 vertices[3] {
-        wuzy_vec3 { .x = 2.27832198f, .y = -3.64938211f, .z = 1.01063895f },
-        wuzy_vec3 { .x = 3.47832203f, .y = -1.24938095f, .z = 2.210639f },
-        wuzy_vec3 { .x = 3.47832203f, .y = -1.24938095f, .z = 1.01063895f },
+    const float vertices[3 * 3] {
+        // clang-format off
+        2.27832198f, -3.64938211f, 1.01063895f,
+        3.47832203f, -1.24938095f, 2.210639f,
+        3.47832203f, -1.24938095f, 1.01063895f,
+        // clang-format on
     };
     wuzy::TriangleCollider collider_b(vertices[0], vertices[1], vertices[2]);
-    const wuzy_mat4 transform_b {
-        {
-            wuzy_vec4 { .x = 1.0f, .y = 0.0f, .z = 0.0f, .w = 0.0f },
-            wuzy_vec4 { .x = 0.0f, .y = 1.0f, .z = 0.0f, .w = 0.0f },
-            wuzy_vec4 { .x = 0.0f, .y = 0.0f, .z = 1.0f, .w = 0.0f },
-            wuzy_vec4 { .x = 0.0f, .y = 0.0f, .z = 0.0f, .w = 1.0f },
-        },
+    const float transform_b[16] {
+        // clang-format off
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f,
+        // clang-format on
     };
     collider_b.set_transform(transform_b);
 
@@ -147,10 +137,13 @@ int main()
         const float stack_angle = glm::pi<float>() / (num_md_stacks - 1) * stack;
         for (size_t slice = 0; slice < num_md_slices; ++slice) {
             const auto slice_angle = 2.0f * glm::pi<float>() / num_md_slices * slice;
-            const auto dir = wuzy_vec3 { glm::cos(slice_angle) * glm::sin(stack_angle),
-                glm::cos(stack_angle), glm::sin(slice_angle) * glm::sin(stack_angle) };
-            const auto ndir = wuzy_vec3 { -dir.x, -dir.y, -dir.z };
-            const auto sup = vec3(collider_a.support(dir)) - vec3(collider_b.support(ndir));
+            const glm::vec3 dir = {
+                glm::cos(slice_angle) * glm::sin(stack_angle),
+                glm::cos(stack_angle),
+                glm::sin(slice_angle) * glm::sin(stack_angle),
+            };
+            const auto ndir = -dir;
+            const auto sup = collider_a.support(dir) - collider_b.support(ndir);
             minkowski_difference.push_back(sup);
         }
     }
@@ -222,16 +215,16 @@ int main()
         const auto& it = epa_debug.iterations[epa_debug.num_iterations - 1];
         for (size_t i = 0; i < it.num_polytope_faces; ++i) {
             const auto& face = it.polytope_faces[i];
-            const auto v0 = vec3(it.polytope_vertices[face.v0]);
-            const auto v1 = vec3(it.polytope_vertices[face.v1]);
-            const auto v2 = vec3(it.polytope_vertices[face.v2]);
+            const auto v0 = glm::make_vec3(it.polytope_vertices + face.v0);
+            const auto v1 = glm::make_vec3(it.polytope_vertices + face.v1);
+            const auto v2 = glm::make_vec3(it.polytope_vertices + face.v2);
 
             const auto face_color = it.face_removed[i] ? glm::vec4(0.5f, 1.0f, 1.0f, 1.0f) // teal
                                                        : glm::vec4(1.0f); // white
             debug_draw.lines(face_color, { v0, v1, v2, v0 });
 
             const auto normal_start = (v0 + v1 + v2) / 3.0f;
-            const auto normal_end = normal_start + vec3(face.normal) * 0.1f;
+            const auto normal_end = normal_start + glm::make_vec3(face.normal) * 0.1f;
             const auto normal_color = i == it.min_dist_face_index
                 ? glm::vec4(0.0f, 1.0f, 0.0f, 1.0f) // green
                 : glm::vec4(0.0f, 1.0f, 1.0f, 1.0f); // teal
@@ -240,13 +233,13 @@ int main()
 
         const auto edges_to_patch = std::span(it.edges_to_patch, it.num_edges_to_patch);
         for (const auto [first, second] : edges_to_patch) {
-            const auto v0 = it.polytope_vertices[first];
-            const auto v1 = it.polytope_vertices[second];
-            debug_draw.lines(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), { vec3(v0), vec3(v1) }); // red
+            const auto v0 = glm::make_vec3(it.polytope_vertices + first);
+            const auto v1 = glm::make_vec3(it.polytope_vertices + second);
+            debug_draw.lines(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), { v0, v1 }); // red
         }
 
         debug_draw.diamond(
-            glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), vec3(it.support_point), 0.01f); // blue
+            glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), glm::make_vec3(it.support_point), 0.01f); // blue
 
         window.swap();
     }

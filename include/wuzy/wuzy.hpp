@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <cstring>
 #include <optional>
 #include <span>
 #include <vector>
@@ -8,44 +9,79 @@
 #include "wuzy.h"
 
 namespace wuzy {
+template <typename Vec3>
+struct RayCastResult {
+    Vec3 normal;
+    Vec3 hit_position;
+    float t;
+};
+
+template <typename Vec3>
+struct CollisionResult {
+    Vec3 normal;
+    float depth;
+};
+
 struct Collider {
     wuzy_collider collider;
 
+    virtual ~Collider() = default;
     Collider() = default;
     Collider(const Collider&) = delete;
     Collider& operator=(const Collider&) = delete;
     Collider(Collider&&) = delete;
     Collider& operator=(Collider&&) = delete;
 
-    void set_transform(const wuzy_mat4& m) { wuzy_collider_set_transform(&collider, &m); }
+    void set_transform(const float m[16]) { wuzy_collider_set_transform(&collider, m); }
 
-    wuzy_vec3 support(const wuzy_vec3& direction) const
+    template <typename Mat4>
+    void set_transform(const Mat4& m)
     {
-        return wuzy_collider_support(&collider, direction);
+        wuzy_collider_set_transform(&collider, &m[0][0]);
     }
 
-    std::optional<wuzy_ray_cast_result> ray_cast(
-        const wuzy_vec3& start, const wuzy_vec3& direction) const
+    template <typename Vec3>
+    Vec3 support(const Vec3& v) const
+    {
+        float sup[3];
+        wuzy_collider_support(&collider, &v[0], sup);
+        return { sup[0], sup[1], sup[2] };
+    }
+
+    template <typename Vec3>
+    auto ray_cast(const Vec3& start, const Vec3& dir) const -> std::optional<RayCastResult<Vec3>>
     {
         wuzy_ray_cast_result res;
-        if (wuzy_collider_ray_cast(&collider, start, direction, &res)) {
-            return res;
+        if (wuzy_collider_ray_cast(&collider, &start[0], &dir[0], &res)) {
+            return RayCastResult<Vec3> {
+                { res.normal[0], res.normal[1], res.normal[2] },
+                { res.hit_position[0], res.hit_position[1], res.hit_position[2] },
+                res.t,
+            };
         } else {
             return std::nullopt;
         }
     }
 
-    wuzy_aabb get_aabb() const { return wuzy_collider_get_aabb(&collider); }
+    template <typename Vec3>
+    std::pair<Vec3, Vec3> get_aabb() const
+    {
+        float min[3], max[3];
+        wuzy_collider_get_aabb(&collider, min, max);
+        return { Vec3(min[0], min[1], min[2]), Vec3(max[0], max[1], max[2]) };
+    }
 };
 
 struct TriangleCollider : public Collider {
     wuzy_triangle_collider_userdata userdata;
 
-    TriangleCollider(const wuzy_vec3& v0, const wuzy_vec3& v1, const wuzy_vec3& v2)
+    template <typename Vec3>
+    TriangleCollider(const Vec3& v0, const Vec3& v1, const Vec3& v2)
     {
-        userdata.vertices[0] = v0;
-        userdata.vertices[1] = v1;
-        userdata.vertices[2] = v2;
+        // Not cool, but enough for now
+        std::memcpy(userdata.vertices[0], &v0, sizeof(float) * 3);
+        std::memcpy(userdata.vertices[1], &v1, sizeof(float) * 3);
+        std::memcpy(userdata.vertices[2], &v2, sizeof(float) * 3);
         wuzy_triangle_collider_init(&collider, &userdata);
     }
 
@@ -74,20 +110,20 @@ struct SphereCollider : public Collider {
 
 struct ConvexPolyhedronCollider : public Collider {
     wuzy_convex_polyhedron_collider_userdata userdata;
-    std::vector<wuzy_vec3> vertices;
-    std::vector<wuzy_face_indices> faces;
-    std::vector<wuzy_vec3> normals;
+    std::vector<float> vertices;
+    std::vector<size_t> indices;
+    std::vector<float> normals;
 
-    ConvexPolyhedronCollider(std::span<const wuzy_vec3> v, std::span<const wuzy_face_indices> f)
+    ConvexPolyhedronCollider(std::span<const float> v, std::span<const size_t> i)
         : vertices(v.begin(), v.end())
-        , faces(f.begin(), f.end())
+        , indices(i.begin(), i.end())
     {
-        normals.resize(faces.size());
+        normals.resize(i.size()); // /3*3
         userdata = {
             .vertices = vertices.data(),
-            .num_vertices = vertices.size(),
-            .face_indices = faces.data(),
-            .num_faces = faces.size(),
+            .num_vertices = vertices.size() / 3,
+            .face_indices = indices.data(),
+            .num_faces = indices.size() / 3,
             .normals = normals.data(),
         };
         wuzy_convex_polyhedron_collider_init(&collider, &userdata);
@@ -96,7 +132,7 @@ struct ConvexPolyhedronCollider : public Collider {
     ConvexPolyhedronCollider(const ConvexPolyhedronCollider& other)
         : userdata(other.userdata)
         , vertices(other.vertices)
-        , faces(other.faces)
+        , indices(other.indices)
         , normals(other.normals)
     {
         collider = other.collider;
@@ -126,12 +162,13 @@ inline wuzy_collision_result epa(const Collider& a, const Collider& b,
     return wuzy_epa(&a.collider, &b.collider, &simplex, debug);
 }
 
-inline std::optional<wuzy_collision_result> get_collision(const Collider& a, const Collider& b,
+template <typename Vec3>
+std::optional<CollisionResult<Vec3>> get_collision(const Collider& a, const Collider& b,
     wuzy_gjk_debug* gjk_debug = nullptr, wuzy_epa_debug* epa_debug = nullptr)
 {
     wuzy_collision_result res;
     if (wuzy_get_collision(&a.collider, &b.collider, &res, gjk_debug, epa_debug)) {
-        return res;
+        return CollisionResult<Vec3> { { res.normal[0], res.normal[1], res.normal[2] }, res.depth };
     } else {
         return std::nullopt;
     }
@@ -180,11 +217,11 @@ struct AabbTree {
     }
 
     std::vector<wuzy_aabb_tree_node> build(
-        std::span<Collider*> colliders, std::span<uint64_t> bitmasks = {})
+        std::span<wuzy_collider*> colliders, std::span<uint64_t> bitmasks = {})
     {
         assert(bitmasks.empty() || colliders.size() == bitmasks.size());
         std::vector<wuzy_aabb_tree_node> nodes(colliders.size(), wuzy_aabb_tree_node { 0 });
-        wuzy_aabb_tree_build(aabb_tree, reinterpret_cast<wuzy_collider**>(colliders.data()),
+        wuzy_aabb_tree_build(aabb_tree, colliders.data(),
             bitmasks.size() ? bitmasks.data() : nullptr, colliders.size(), nodes.data());
         return nodes;
     }
@@ -224,14 +261,17 @@ struct AabbTree {
             }
         }
 
-        void begin(const wuzy_vec3& point, uint64_t bitmask = 0, wuzy_query_debug* debug = nullptr)
+        template <typename Vec3>
+        void begin(const Vec3& v, uint64_t bitmask = 0, wuzy_query_debug* debug = nullptr)
         {
-            wuzy_aabb_tree_node_query_point_begin(query, point, bitmask, debug);
+            wuzy_aabb_tree_node_query_point_begin(query, &v[0], bitmask, debug);
         }
 
-        void begin(const wuzy_aabb& aabb, uint64_t bitmask = 0, wuzy_query_debug* debug = nullptr)
+        template <typename Vec3>
+        void begin(const Vec3& min, const Vec3& max, uint64_t bitmask = 0,
+            wuzy_query_debug* debug = nullptr)
         {
-            wuzy_aabb_tree_node_query_aabb_begin(query, &aabb, bitmask, debug);
+            wuzy_aabb_tree_node_query_aabb_begin(query, &min[0], &max[0], bitmask, debug);
         }
 
         std::optional<wuzy_aabb_tree_node> next()
@@ -254,15 +294,23 @@ struct AabbTree {
             return res;
         }
 
-        std::optional<std::pair<wuzy_aabb_tree_node, wuzy_ray_cast_result>> ray_cast(
-            const wuzy_vec3& start, const wuzy_vec3& direction, uint64_t bitmask = 0,
+        template <typename Vec3>
+        auto ray_cast(const Vec3& start, const Vec3& dir, uint64_t bitmask = 0,
             wuzy_query_debug* debug = nullptr)
+            -> std::optional<std::pair<wuzy_aabb_tree_node, RayCastResult<Vec3>>>
         {
             wuzy_aabb_tree_node node;
             wuzy_ray_cast_result res;
             if (wuzy_aabb_tree_node_query_ray_cast(
-                    query, start, direction, bitmask, &node, &res, debug)) {
-                return std::pair { node, res };
+                    query, &start[0], &dir[0], bitmask, &node, &res, debug)) {
+                return std::pair {
+                    node,
+                    RayCastResult<Vec3> {
+                        Vec3 { res.normal[0], res.normal[1], res.normal[2] },
+                        Vec3 { res.hit_position[0], res.hit_position[1], res.hit_position[2] },
+                        res.t,
+                    },
+                };
             } else {
                 return std::nullopt;
             }

@@ -83,21 +83,6 @@ void draw_mesh(const glwx::Mesh& mesh, const glm::vec4& color, const glw::Textur
     mesh.draw();
 }
 
-glm::vec3 vec3(const wuzy_vec3& v)
-{
-    return glm::vec3(v.x, v.y, v.z);
-}
-
-wuzy_vec3 vec3(const glm::vec3& v)
-{
-    return wuzy_vec3 { v.x, v.y, v.z };
-}
-
-wuzy_vec3 vec3(const float* data)
-{
-    return wuzy_vec3 { data[0], data[1], data[2] };
-}
-
 glwx::Mesh get_mesh(const tinyobj::ObjReader& reader, const glw::VertexFormat& vfmt)
 {
     glwx::Mesh mesh;
@@ -156,21 +141,14 @@ std::vector<wuzy::TriangleCollider> get_colliders(const tinyobj::ObjReader& read
         for (size_t f = 0; f < num_faces; ++f) {
             const auto num_face_vertices = shape.mesh.num_face_vertices[f];
             assert(num_face_vertices == 3);
-            const auto v0 = vec3(vert_data + 3 * indices[index_offset + 0].vertex_index);
-            const auto v1 = vec3(vert_data + 3 * indices[index_offset + 1].vertex_index);
-            const auto v2 = vec3(vert_data + 3 * indices[index_offset + 2].vertex_index);
+            const auto v0 = glm::make_vec3(vert_data + 3 * indices[index_offset + 0].vertex_index);
+            const auto v1 = glm::make_vec3(vert_data + 3 * indices[index_offset + 1].vertex_index);
+            const auto v2 = glm::make_vec3(vert_data + 3 * indices[index_offset + 2].vertex_index);
             const auto& c = colliders.emplace_back(v0, v1, v2);
             index_offset += num_face_vertices;
         }
     }
     return colliders;
-}
-
-wuzy_mat4 mat4(const glm::mat4& m)
-{
-    wuzy_mat4 r;
-    std::memcpy(&r.cols[0], &m[0][0], sizeof(float) * 16);
-    return r;
 }
 
 bool move_player(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query,
@@ -184,8 +162,8 @@ bool move_player(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query
     constexpr float max_fall_speed = 15.0f;
     constexpr float jump_height = 1.0f;
 
-    const auto ray_start = vec3(trafo.getPosition());
-    const auto ray_dir = wuzy_vec3 { 0.0f, -1.0f, 0.0f };
+    const auto ray_start = trafo.getPosition();
+    const glm::vec3 ray_dir = { 0.0f, -1.0f, 0.0f };
     const auto rc = bp_query.ray_cast(ray_start, ray_dir);
     const auto on_ground = rc && rc->second.t < 0.71f; // kind of controls walkable slope height
     if (on_ground) {
@@ -228,13 +206,14 @@ bool move_player(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query
     }
 
     trafo.move(velocity * dt);
-    collider.set_transform(mat4(trafo.getMatrix()));
+    collider.set_transform(trafo.getMatrix());
 
     // This is kind of racey, because the broadphase query depends on the transform of the
     // player collider, which is changed in the loop.
     // In a real game, you would do this totally differently (many possible ways)!
     wuzy_query_debug debug = {};
-    bp_query.begin(collider.get_aabb(), 0, &debug);
+    const auto [aabb_min, aabb_max] = collider.get_aabb<glm::vec3>();
+    bp_query.begin(aabb_min, aabb_max, 0, &debug);
     const auto candidates = bp_query.all();
     fmt::println("collision: nodes={}, bitmasks={}, aabbs={}, leaves={}, full={}",
         debug.nodes_checked, debug.bitmask_checks_passed, debug.aabb_checks_passed,
@@ -249,11 +228,10 @@ bool move_player(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query
         wuzy_gjk_debug gjk_debug = {};
         wuzy_epa_debug epa_debug = {};
         if (const auto col
-            = wuzy::get_collision(collider, *other_collider, &gjk_debug, &epa_debug)) {
-            const auto mtv
-                = -glm::vec3(col->normal.x, col->normal.y, col->normal.z) * col->depth * 1.0f;
+            = wuzy::get_collision<glm::vec3>(collider, *other_collider, &gjk_debug, &epa_debug)) {
+            const auto mtv = -col->normal * col->depth * 1.0f;
             trafo.move(mtv);
-            collider.set_transform(mat4(trafo.getMatrix()));
+            collider.set_transform(trafo.getMatrix());
             collision = true;
         }
         wuzy_gjk_debug_free(&gjk_debug);
@@ -271,20 +249,33 @@ glm::quat camera_look(float& pitch, float& yaw, const glm::vec2& look)
     return yaw_quat * pitch_quat;
 }
 
-void collect_aabbs(std::vector<std::pair<wuzy_aabb, uint32_t>>& aabbs,
+struct Aabb {
+    glm::vec3 min;
+    glm::vec3 max;
+};
+
+Aabb get_aabb(const wuzy_aabb_tree_dump_node* node)
+{
+    return {
+        { node->aabb_min[0], node->aabb_min[1], node->aabb_min[2] },
+        { node->aabb_max[0], node->aabb_max[1], node->aabb_max[2] },
+    };
+}
+
+void collect_aabbs(std::vector<std::pair<Aabb, uint32_t>>& aabbs,
     const wuzy_aabb_tree_dump_node* node, uint32_t depth = 0)
 {
-    aabbs.push_back({ node->aabb, depth });
+    aabbs.push_back({ get_aabb(node), depth });
     if (!node->collider) {
         collect_aabbs(aabbs, node->left, depth + 1);
         collect_aabbs(aabbs, node->right, depth + 1);
     }
 }
 
-std::vector<std::pair<wuzy_aabb, uint32_t>> get_aabbs(
+std::vector<std::pair<Aabb, uint32_t>> get_aabbs(
     const std::vector<wuzy_aabb_tree_dump_node> debug_nodes)
 {
-    std::vector<std::pair<wuzy_aabb, uint32_t>> aabbs;
+    std::vector<std::pair<Aabb, uint32_t>> aabbs;
     collect_aabbs(aabbs, &debug_nodes[0]);
     return aabbs;
 }
@@ -292,12 +283,15 @@ std::vector<std::pair<wuzy_aabb, uint32_t>> get_aabbs(
 void print_node(const wuzy_aabb_tree_dump_node& node, size_t indent = 0)
 {
     const auto indent_str = std::string(indent * 2, ' ');
-    auto vol = [](const wuzy_aabb& b) {
-        const auto ext = vec3(b.max) - vec3(b.min);
+    auto vol = [](const wuzy_aabb_tree_dump_node& node) {
+        const glm::vec3 ext = {
+            node.aabb_max[0] - node.aabb_min[0],
+            node.aabb_max[1] - node.aabb_min[1],
+            node.aabb_max[2] - node.aabb_min[2],
+        };
         return ext.x * ext.y * ext.z;
     };
-    fmt::println(
-        "{}{} ({}) (vol: {})", indent_str, node.id.id, fmt::ptr(node.collider), vol(node.aabb));
+    fmt::println("{}{} ({}) (vol: {})", indent_str, node.id.id, fmt::ptr(node.collider), vol(node));
     if (node.left) {
         print_node(*node.left, indent + 1);
     }
@@ -328,7 +322,7 @@ void draw_broadphase_debug(wuzy::AabbTree& broadphase, DebugDraw& debug_draw)
     const auto debug_nodes = broadphase.dump_nodes();
     for (const auto& [aabb, depth] : get_aabbs(debug_nodes)) {
         const auto& color = aabb_colors[depth % aabb_colors.size()];
-        debug_draw.aabb(color, vec3(aabb.min), vec3(aabb.max));
+        debug_draw.aabb(color, aabb.min, aabb.max);
     }
 }
 
@@ -368,11 +362,16 @@ int main()
 
     const auto level = get_mesh(reader, vfmt);
     auto level_colliders = get_colliders(reader);
-    for (auto& collider : level_colliders) {
-        broadphase.insert(collider);
+    std::vector<wuzy_collider*> collider_ptrs(level_colliders.size(), nullptr);
+    for (size_t i = 0; i < level_colliders.size(); ++i) {
+        collider_ptrs[i] = &level_colliders[i].collider;
     }
+    /*for (auto& collider : level_colliders) {
+        broadphase.insert(collider);
+    }*/
+    broadphase.build(collider_ptrs);
     const auto start = std::chrono::high_resolution_clock::now();
-    broadphase.rebuild();
+    // broadphase.rebuild();
     const auto delta = std::chrono::high_resolution_clock::now() - start;
     print_tree(broadphase);
     fmt::println(
@@ -481,16 +480,15 @@ int main()
             draw_broadphase_debug(broadphase, debug_draw);
         }
 
-        const auto ray_start = vec3(camera_trafo.getPosition());
-        const auto ray_dir = vec3(camera_trafo.getForward());
+        const auto ray_start = camera_trafo.getPosition();
+        const auto ray_dir = camera_trafo.getForward();
         wuzy_query_debug debug = {};
         const auto rc = bp_query.ray_cast(ray_start, ray_dir, 0, &debug);
         if (rc) {
             const auto [node, res] = *rc;
-            const auto marker_pos = vec3(res.hit_position);
-            debug_draw.diamond(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), marker_pos, 0.05f);
-            debug_draw.arrow(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), marker_pos,
-                marker_pos + vec3(res.normal) * 0.2f);
+            debug_draw.diamond(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), res.hit_position, 0.05f);
+            debug_draw.arrow(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), res.hit_position,
+                res.hit_position + res.normal * 0.2f);
         }
 
         fmt::println("raycast: nodes={}, bitmasks={}, aabbs={}, leaves={}, full={}",

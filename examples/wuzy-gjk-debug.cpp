@@ -12,21 +12,9 @@
 
 using namespace std::string_literals;
 
-glm::vec3 vec3(const wuzy_vec3& v)
+std::string str(const float v[3])
 {
-    return glm::vec3(v.x, v.y, v.z);
-}
-
-wuzy_mat4 mat4(const glm::mat4& m)
-{
-    wuzy_mat4 r;
-    std::memcpy(&r.cols[0], &m[0][0], sizeof(float) * 16);
-    return r;
-}
-
-std::string str(const wuzy_vec3& v)
-{
-    return fmt::format("{{{}, {}, {}}}", v.x, v.y, v.z);
+    return fmt::format("{{{}, {}, {}}}", v[0], v[1], v[2]);
 }
 
 void print(const wuzy_gjk_debug_iteration& it)
@@ -41,6 +29,11 @@ void print(const wuzy_gjk_debug_iteration& it)
     }
     fmt::print("}}\n");
     fmt::print("contains_origin: {}\n", it.contains_origin);
+}
+
+glm::vec3 make_vec3(const float v[3])
+{
+    return { v[0], v[1], v[2] };
 }
 
 int main()
@@ -68,12 +61,14 @@ int main()
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
 
-    const std::vector<wuzy_vec3> triangle_positions {
-        wuzy_vec3 { -1.0f, -1.0f, -1.0f },
-        wuzy_vec3 { -1.0f, 1.0f, 1.0f },
-        wuzy_vec3 { 1.0f, 1.0f, -1.0f },
+    const std::vector<float> triangle_positions {
+        // clang-format off
+        -1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f, -1.0f,
+        // clang-format on
     };
-    const std::vector<wuzy_face_indices> triangle_indices { { 0, 1, 2 } };
+    const std::vector<size_t> triangle_indices { 0, 1, 2 };
 
     wuzy::ConvexPolyhedronCollider collider_a(triangle_positions, triangle_indices);
 
@@ -81,7 +76,7 @@ int main()
     wuzy::SphereCollider collider_b(sphere_radius);
     // const auto trafo = glwx::Transform(glm::vec3(0.1f, 0.0f, 0.5f));
     const auto trafo = glwx::Transform(glm::vec3(0.0f, 0.0f, 0.0f));
-    collider_b.set_transform(mat4(trafo.getMatrix()));
+    collider_b.set_transform(trafo.getMatrix());
 
     std::vector<glm::vec3> a_support;
     std::vector<glm::vec3> b_support;
@@ -92,14 +87,16 @@ int main()
         const float stack_angle = glm::pi<float>() / (num_md_stacks - 1) * stack;
         for (size_t slice = 0; slice < num_md_slices; ++slice) {
             const auto slice_angle = 2.0f * glm::pi<float>() / num_md_slices * slice;
-            const auto dir = wuzy_vec3 { glm::cos(slice_angle) * glm::sin(stack_angle),
-                glm::cos(stack_angle), glm::sin(slice_angle) * glm::sin(stack_angle) };
-            const auto ndir = wuzy_vec3 { -dir.x, -dir.y, -dir.z };
+            const glm::vec3 dir = { 
+                glm::cos(slice_angle) * glm::sin(stack_angle),
+                glm::cos(stack_angle), 
+                glm::sin(slice_angle) * glm::sin(stack_angle),
+            };
+            const glm::vec3 ndir = { -dir.x, -dir.y, -dir.z };
 
-            a_support.push_back(vec3(collider_a.support(dir)));
-            b_support.push_back(vec3(collider_b.support(dir)));
-            minkowski_difference.push_back(
-                vec3(collider_a.support(dir)) - vec3(collider_b.support(ndir)));
+            a_support.push_back(collider_a.support(dir));
+            b_support.push_back(collider_b.support(dir));
+            minkowski_difference.push_back(collider_a.support(dir) - collider_b.support(ndir));
         }
     }
 
@@ -191,59 +188,59 @@ int main()
             glm::vec4(0.32f, 0.7f, 0.9f, 1.0f), trafo.getPosition(), sphere_radius, 32, 32);
         debug_draw.lines(glm::vec4(0.6f, 0.6f, 0.1f, 1.0f), // yellow/green
             {
-                vec3(triangle_positions[0]),
-                vec3(triangle_positions[1]),
-                vec3(triangle_positions[1]),
-                vec3(triangle_positions[2]),
-                vec3(triangle_positions[2]),
-                vec3(triangle_positions[0]),
+                make_vec3(&triangle_positions[0]),
+                make_vec3(&triangle_positions[1]),
+                make_vec3(&triangle_positions[1]),
+                make_vec3(&triangle_positions[2]),
+                make_vec3(&triangle_positions[2]),
+                make_vec3(&triangle_positions[0]),
             });
 
         const auto& it = gjk_debug.iterations[debug_it];
 
         debug_draw.arrow(glm::vec4(0.0f, 1.0f, 1.0f, 1.0f), glm::vec3(0.0f),
-            vec3(it.direction) * 0.5f); // turquoise
+            make_vec3(it.direction) * 0.5f); // turquoise
 
         const auto simplex_color = glm::vec4(1.0f); // white
 
         for (size_t i = 0; i < it.simplex.num_vertices; ++i) {
-            debug_draw.diamond(simplex_color, vec3(it.simplex.vertices[i]), 0.01f);
+            debug_draw.diamond(simplex_color, make_vec3(it.simplex.vertices[i]), 0.01f);
         }
 
         if (it.simplex.num_vertices == 2) {
             // clang-format off
             debug_draw.lines(simplex_color,
                 {
-                    vec3(it.simplex.vertices[0]), vec3(it.simplex.vertices[1]),
+                    make_vec3(it.simplex.vertices[0]), make_vec3(it.simplex.vertices[1]),
                 });
             // clang-format on
         } else if (it.simplex.num_vertices == 3) {
             // clang-format off
             debug_draw.lines(simplex_color,
                 {
-                    vec3(it.simplex.vertices[0]), vec3(it.simplex.vertices[1]),
-                    vec3(it.simplex.vertices[1]), vec3(it.simplex.vertices[2]),
-                    vec3(it.simplex.vertices[2]), vec3(it.simplex.vertices[0]),
+                    make_vec3(it.simplex.vertices[0]), make_vec3(it.simplex.vertices[1]),
+                    make_vec3(it.simplex.vertices[1]), make_vec3(it.simplex.vertices[2]),
+                    make_vec3(it.simplex.vertices[2]), make_vec3(it.simplex.vertices[0]),
                 });
             // clang-format on
         } else if (it.simplex.num_vertices == 4) {
             // clang-format off
             debug_draw.lines(simplex_color,
                 {
-                    vec3(it.simplex.vertices[0]), vec3(it.simplex.vertices[1]),
-                    vec3(it.simplex.vertices[1]), vec3(it.simplex.vertices[2]),
-                    vec3(it.simplex.vertices[2]), vec3(it.simplex.vertices[0]),
+                    make_vec3(it.simplex.vertices[0]), make_vec3(it.simplex.vertices[1]),
+                    make_vec3(it.simplex.vertices[1]), make_vec3(it.simplex.vertices[2]),
+                    make_vec3(it.simplex.vertices[2]), make_vec3(it.simplex.vertices[0]),
 
-                    vec3(it.simplex.vertices[0]), vec3(it.simplex.vertices[3]),
-                    vec3(it.simplex.vertices[1]), vec3(it.simplex.vertices[3]),
-                    vec3(it.simplex.vertices[2]), vec3(it.simplex.vertices[3]),
+                    make_vec3(it.simplex.vertices[0]), make_vec3(it.simplex.vertices[3]),
+                    make_vec3(it.simplex.vertices[1]), make_vec3(it.simplex.vertices[3]),
+                    make_vec3(it.simplex.vertices[2]), make_vec3(it.simplex.vertices[3]),
                 });
             // clang-format on
         }
 
-        debug_draw.diamond(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), vec3(it.a_support), 0.005f); // red
-        debug_draw.diamond(glm::vec4(0.0f, 1.0f, 1.0f, 1.0f), vec3(it.b_support), 0.005f); // turq
-        debug_draw.diamond(glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), vec3(it.support), 0.005f); // blue
+        debug_draw.diamond(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), make_vec3(it.a_support), 0.005f); // red
+        debug_draw.diamond(glm::vec4(0.0f, 1.0f, 1.0f, 1.0f), make_vec3(it.b_support), 0.005f); // turq
+        debug_draw.diamond(glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), make_vec3(it.support), 0.005f); // blue
 
         window.swap();
     }
