@@ -9,6 +9,7 @@ include(cmake/wall.cmake)
 include(cmake/no-rtti.cmake)
 include(cmake/no-exceptions.cmake)
 
+option(WUZY_ENABLE_ASAN "Enable ASan" ON)
 if(WUZY_ENABLE_ASAN)
   include(cmake/asan.cmake)
 endif()
