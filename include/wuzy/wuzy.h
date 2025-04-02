@@ -24,6 +24,9 @@ should lock externally, if you need parallel access.
 
 // Basic Types
 
+// float[3] should be considered a vector with components x, y, z
+// float[16] should be considered 4x4 matrices in column-major order
+
 // https://nullprogram.com/blog/2023/12/17/
 typedef void* (*wuzy_allocator_allocate)(size_t size, void* ctx);
 typedef void* (*wuzy_allocator_reallocate)(void* ptr, size_t old_size, size_t new_size, void* ctx);
@@ -36,43 +39,20 @@ typedef struct {
     void* ctx;
 } wuzy_allocator;
 
-typedef struct {
-    float x, y, z;
-} wuzy_vec3;
-
-typedef struct {
-    float x, y, z, w;
-} wuzy_vec4;
-
-typedef struct {
-    wuzy_vec4 cols[4];
-} wuzy_mat4;
-
-wuzy_mat4 wuzy_invert_trs(const wuzy_mat4* mat);
-
-typedef struct {
-    wuzy_vec3 min;
-    wuzy_vec3 max;
-} wuzy_aabb;
-
-typedef struct {
-    size_t i0;
-    size_t i1;
-    size_t i2;
-} wuzy_face_indices;
+void wuzy_invert_trs(const float mat[16], float inv[16]);
 
 // Collision Detection
 
 typedef struct {
+    float normal[3];
+    float hit_position[3];
     float t;
-    wuzy_vec3 normal;
-    wuzy_vec3 hit_position;
 } wuzy_ray_cast_result;
 
 typedef struct {
     // Make sure to initialize these with identity matrices!
-    wuzy_mat4 transform;
-    wuzy_mat4 inverse_transform;
+    float transform[16];
+    float inverse_transform[16];
     // This userdata can be used for additional collider shape information for support_func and
     // ray_cast_func. For a few pre-provided shapes, see below.
     // This userdata is not owned by collider, so make sure it lives as long as you want to use
@@ -80,28 +60,29 @@ typedef struct {
     void* userdata;
     // Support_func and ray_cast_func take vectors in local space and return vectors in local space.
     // So do the functions wuzy_*_collider_support_func/ray_cast.
-    wuzy_vec3 (*support_func)(const void* userdata, wuzy_vec3 direction);
+    void (*support_func)(const void* userdata, const float dir[3], float sup[3]);
     // Will return true if the ray hit and fill in result, otherwise just returns false
-    bool (*ray_cast_func)(
-        const void* userdata, wuzy_vec3 start, wuzy_vec3 direction, wuzy_ray_cast_result* result);
+    bool (*ray_cast_func)(const void* userdata, const float start[3], const float dir[3],
+        wuzy_ray_cast_result* result);
 } wuzy_collider;
 
-void wuzy_collider_set_transform(wuzy_collider* collider, const wuzy_mat4* transform);
+void wuzy_collider_set_transform(wuzy_collider* collider, const float transform[16]);
 // These take into account the collider transform, so they take vectors in world space
-wuzy_vec3 wuzy_collider_support(const wuzy_collider* collider, wuzy_vec3 direction);
-bool wuzy_collider_ray_cast(const wuzy_collider* collider, wuzy_vec3 start, wuzy_vec3 direction,
+void wuzy_collider_support(const wuzy_collider* collider, const float dir[3], float sup[3]);
+bool wuzy_collider_ray_cast(const wuzy_collider* collider, const float start[3], const float dir[3],
     wuzy_ray_cast_result* result);
-wuzy_aabb wuzy_collider_get_aabb(const wuzy_collider* collider);
+void wuzy_collider_get_aabb(const wuzy_collider* collider, float min[3], float max[3]);
 
-// Helper function for triangle and convex polyhedron colliders. There should be just as many
-// normals as there are faces.
-bool wuzy_calculate_normals(const wuzy_vec3* vertices, size_t num_vertices,
-    const wuzy_face_indices* face_indices, size_t num_faces, wuzy_vec3* normals);
+// Helper function for triangle and convex polyhedron colliders.
+// There should be three floats for every vertex and three indices for every face.
+// There should be just as many normals as there are faces and three floats per normal.
+bool wuzy_calculate_normals(const float* vertices, size_t num_vertices, const size_t* face_indices,
+    size_t num_faces, float* normals);
 
 typedef struct {
-    wuzy_vec3 vertices[3];
-    // normal must be: cross(vertices[1] - vertices[0], vertices[2] - vertices[0]) (not normalized!)
-    wuzy_vec3 normal;
+    float vertices[3][3];
+    // normal must be: cross(v[1] - v[0], v[2] - v[0]) (not normalized!)
+    float normal[3];
 } wuzy_triangle_collider_userdata;
 
 // This calculates the normal from vertices, initializes transform and inverse_transform with
@@ -109,9 +90,9 @@ typedef struct {
 // collider->userdata.
 void wuzy_triangle_collider_init(
     wuzy_collider* collider, wuzy_triangle_collider_userdata* userdata);
-wuzy_vec3 wuzy_triangle_collider_support(const void* userdata, wuzy_vec3 direction);
+void wuzy_triangle_collider_support(const void* userdata, const float dir[3], float sup[3]);
 bool wuzy_triangle_collider_ray_cast(
-    const void* userdata, wuzy_vec3 start, wuzy_vec3 direction, wuzy_ray_cast_result* result);
+    const void* userdata, const float start[3], const float dir[3], wuzy_ray_cast_result* result);
 
 typedef struct {
     float radius;
@@ -119,30 +100,31 @@ typedef struct {
 
 // This initializes the collider fields like the wuzy_triangle_collider_init.
 void wuzy_sphere_collider_init(wuzy_collider* collider, wuzy_sphere_collider_userdata* userdata);
-wuzy_vec3 wuzy_sphere_collider_support(const void* userdata, wuzy_vec3 direction);
+void wuzy_sphere_collider_support(const void* userdata, const float dir[3], float sup[3]);
 bool wuzy_sphere_collider_ray_cast(
-    const void* userdata, wuzy_vec3 start, wuzy_vec3 direction, wuzy_ray_cast_result* result);
+    const void* userdata, const float start[3], const float dir[3], wuzy_ray_cast_result* result);
 
 typedef struct {
-    wuzy_vec3* vertices;
+    float* vertices;
     size_t num_vertices;
-    wuzy_face_indices* face_indices;
+    size_t* face_indices;
     size_t num_faces;
-    wuzy_vec3* normals; // one normal per face
+    float* normals; // one normal per face
 } wuzy_convex_polyhedron_collider_userdata;
 
 // This calculates the normals (make sure userdata->normals points to suitably sized memory) and
 // inits the fields in collider like wuzy_triangle_collider_init.
 void wuzy_convex_polyhedron_collider_init(
     wuzy_collider* collider, wuzy_convex_polyhedron_collider_userdata* userdata);
-wuzy_vec3 wuzy_convex_polyhedron_collider_support(const void* userdata, wuzy_vec3 direction);
+void wuzy_convex_polyhedron_collider_support(
+    const void* userdata, const float dir[3], float sup[3]);
 bool wuzy_convex_polyhedron_collider_ray_cast(
-    const void* userdata, wuzy_vec3 start, wuzy_vec3 direction, wuzy_ray_cast_result* result);
+    const void* userdata, const float start[3], const float dir[3], wuzy_ray_cast_result* result);
 
 // TODO: Capsule!
 
 typedef struct {
-    wuzy_vec3 vertices[4];
+    float vertices[4][3];
     size_t num_vertices;
 } wuzy_simplex3d;
 
@@ -157,7 +139,7 @@ typedef struct wuzy_epa_debug wuzy_epa_debug;
 
 // TODO: Lower-Level return for EPA
 typedef struct {
-    wuzy_vec3 normal;
+    float normal[3];
     float depth;
     // TODO: contact points
 } wuzy_collision_result;
@@ -262,7 +244,8 @@ typedef struct wuzy_aabb_tree_dump_node wuzy_aabb_tree_dump_node;
 struct wuzy_aabb_tree_dump_node {
     wuzy_aabb_tree_node id;
     const wuzy_collider* collider; // will be null for internal nodes
-    wuzy_aabb aabb;
+    float aabb_min[3];
+    float aabb_max[3];
     uint64_t bitmask;
     wuzy_aabb_tree_dump_node* parent;
     wuzy_aabb_tree_dump_node* left;
@@ -304,11 +287,11 @@ void wuzy_aabb_tree_node_query_destroy(wuzy_aabb_tree_node_query* query);
 
 typedef struct wuzy_query_debug wuzy_query_debug;
 
-void wuzy_aabb_tree_node_query_point_begin(
-    wuzy_aabb_tree_node_query* query, wuzy_vec3 point, uint64_t bitmask, wuzy_query_debug* debug);
-
-void wuzy_aabb_tree_node_query_aabb_begin(wuzy_aabb_tree_node_query* query, const wuzy_aabb* aabb,
+void wuzy_aabb_tree_node_query_point_begin(wuzy_aabb_tree_node_query* query, const float point[3],
     uint64_t bitmask, wuzy_query_debug* debug);
+
+void wuzy_aabb_tree_node_query_aabb_begin(wuzy_aabb_tree_node_query* query, const float aabb_min[3],
+    const float aabb_max[3], uint64_t bitmask, wuzy_query_debug* debug);
 
 size_t wuzy_aabb_tree_node_query_next(
     wuzy_aabb_tree_node_query* query, wuzy_aabb_tree_node* nodes, size_t max_nodes);
@@ -316,8 +299,8 @@ size_t wuzy_aabb_tree_node_query_next(
 // Since a ray cast only has a single result, this function doesn't require a separate _begin and
 // _next.
 
-bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* query, wuzy_vec3 start,
-    wuzy_vec3 direction, uint64_t bitmask, wuzy_aabb_tree_node* hit_node,
+bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* query, const float start[3],
+    const float dir[3], uint64_t bitmask, wuzy_aabb_tree_node* hit_node,
     wuzy_ray_cast_result* result, wuzy_query_debug* debug);
 
 /*
@@ -352,10 +335,10 @@ size_t wuzy_aabb_tree_pair_query_all(wuzy_aabb_tree_pair_query* query,
 // the purpose. Make sure to free them with the provided functions!
 
 typedef struct {
-    wuzy_vec3 direction;
-    wuzy_vec3 a_support;
-    wuzy_vec3 b_support;
-    wuzy_vec3 support;
+    float direction[3];
+    float a_support[3];
+    float b_support[3];
+    float support[3];
     wuzy_simplex3d simplex;
     bool contains_origin;
 } wuzy_gjk_debug_iteration;
@@ -378,19 +361,19 @@ typedef struct {
     size_t v0;
     size_t v1;
     size_t v2;
-    wuzy_vec3 normal;
+    float normal[3];
     float dist; // distance to origin
 } wuzy_epa_debug_face;
 
 typedef struct {
-    wuzy_vec3* polytope_vertices;
+    float* polytope_vertices; // 3 floats per vertex
     size_t num_polytope_vertices;
     wuzy_epa_debug_face* polytope_faces;
     size_t num_polytope_faces;
     bool* face_removed; // size is num_polytope_faces
     size_t min_dist_face_index;
     float min_face_dist;
-    wuzy_vec3 support_point;
+    float support_point[3];
     float support_dist;
     wuzy_epa_debug_edge* edges_to_patch;
     size_t num_edges_to_patch;

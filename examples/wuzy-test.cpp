@@ -73,23 +73,6 @@ void draw_mesh(const glwx::Mesh& mesh, const glm::vec4& color, const glw::Textur
     mesh.draw();
 }
 
-glm::vec3 vec3(const wuzy_vec3& v)
-{
-    return glm::vec3(v.x, v.y, v.z);
-}
-
-wuzy_vec3 vec3(const glm::vec3 v)
-{
-    return wuzy_vec3 { v.x, v.y, v.z };
-}
-
-wuzy_mat4 mat4(const glm::mat4& m)
-{
-    wuzy_mat4 r;
-    std::memcpy(&r.cols[0], &m[0][0], sizeof(float) * 16);
-    return r;
-}
-
 glwx::Mesh make_triangle_mesh(const glw::VertexFormat& vfmt, const glwx::AttributeLocations& loc,
     std::span<const glm::vec3> positions, std::span<const glm::vec2> tex_coords,
     std::span<const glm::vec3> normals, std::span<const size_t> indices)
@@ -138,43 +121,37 @@ glwx::Mesh make_triangle_mesh(const glw::VertexFormat& vfmt, const glwx::Attribu
     return mesh;
 }
 
-std::vector<wuzy_vec3> to_wuzy(std::span<const glm::vec3> vs)
-{
-    std::vector<wuzy_vec3> ret;
-    for (const auto& v : vs) {
-        ret.emplace_back(wuzy_vec3 { v.x, v.y, v.z });
-    }
-    return ret;
-}
+struct Aabb {
+    glm::vec3 min;
+    glm::vec3 max;
+};
 
-std::vector<std::tuple<size_t, size_t, size_t>> to_wuzy(std::span<const size_t> is)
+Aabb get_aabb(const wuzy_aabb_tree_dump_node* node)
 {
-    assert(is.size() % 3 == 0);
-    std::vector<std::tuple<size_t, size_t, size_t>> ret;
-    for (size_t i = 0; i < is.size(); i += 3) {
-        ret.emplace_back(std::tuple<size_t, size_t, size_t> { is[i + 0], is[i + 1], is[i + 2] });
-    }
-    return ret;
+    return {
+        { node->aabb_min[0], node->aabb_min[1], node->aabb_min[2] },
+        { node->aabb_max[0], node->aabb_max[1], node->aabb_max[2] },
+    };
 }
 
 uint32_t collect_aabbs(
-    std::vector<std::pair<wuzy_aabb, uint32_t>>& aabbs, const wuzy_aabb_tree_dump_node* node)
+    std::vector<std::pair<Aabb, uint32_t>>& aabbs, const wuzy_aabb_tree_dump_node* node)
 {
     if (node->collider) {
-        aabbs.push_back({ node->aabb, 0 });
+        aabbs.push_back({ get_aabb(node), 0 });
         return 0;
     } else {
         const auto d1 = collect_aabbs(aabbs, node->left);
         const auto d2 = collect_aabbs(aabbs, node->right);
-        aabbs.push_back({ node->aabb, (d1 > d2 ? d1 : d2) + 1 });
+        aabbs.push_back({ get_aabb(node), (d1 > d2 ? d1 : d2) + 1 });
         return aabbs.back().second;
     }
 }
 
-std::vector<std::pair<wuzy_aabb, uint32_t>> get_aabbs(
+std::vector<std::pair<Aabb, uint32_t>> get_aabbs(
     const std::vector<wuzy_aabb_tree_dump_node> debug_nodes)
 {
-    std::vector<std::pair<wuzy_aabb, uint32_t>> aabbs;
+    std::vector<std::pair<Aabb, uint32_t>> aabbs;
     collect_aabbs(aabbs, &debug_nodes[0]);
     return aabbs;
 }
@@ -204,26 +181,31 @@ int main()
     const auto box_size = 1.0f;
     const auto half_box_size = box_size / 2.0f;
     auto box_mesh = glwx::makeBoxMesh(vert_fmt, { 0, 1, 2 }, box_size, box_size, box_size);
-    std::vector<wuzy_vec3> box_verts = {
-        wuzy_vec3 { -half_box_size, -half_box_size, -half_box_size },
-        wuzy_vec3 { half_box_size, -half_box_size, -half_box_size },
-        wuzy_vec3 { half_box_size, half_box_size, -half_box_size },
-        wuzy_vec3 { -half_box_size, half_box_size, -half_box_size },
 
-        wuzy_vec3 { -half_box_size, -half_box_size, half_box_size },
-        wuzy_vec3 { half_box_size, -half_box_size, half_box_size },
-        wuzy_vec3 { half_box_size, half_box_size, half_box_size },
-        wuzy_vec3 { -half_box_size, half_box_size, half_box_size },
+    std::vector<float> box_verts = {
+        // clang-format off
+        -half_box_size, -half_box_size, -half_box_size,
+         half_box_size, -half_box_size, -half_box_size,
+         half_box_size,  half_box_size, -half_box_size,
+        -half_box_size,  half_box_size, -half_box_size,
+
+        -half_box_size, -half_box_size,  half_box_size,
+         half_box_size, -half_box_size,  half_box_size,
+         half_box_size,  half_box_size,  half_box_size,
+        -half_box_size,  half_box_size,  half_box_size,
+        // clang-format on
     };
 
-    std::vector<wuzy_face_indices> box_faces = {
-        wuzy_face_indices { 3, 0, 4 }, wuzy_face_indices { 3, 4, 7 }, // -x
-        wuzy_face_indices { 6, 5, 1 }, wuzy_face_indices { 6, 1, 2 }, // +x
-        wuzy_face_indices { 4, 0, 1 }, wuzy_face_indices { 4, 1, 5 }, // -y
-        wuzy_face_indices { 3, 7, 6 }, wuzy_face_indices { 3, 6, 2 }, // +y
-        wuzy_face_indices { 2, 1, 0 }, wuzy_face_indices { 2, 0, 3 }, // -z
-        wuzy_face_indices { 7, 4, 5 }, wuzy_face_indices { 7, 5, 6 }, // +z
+    // clang-format off
+    std::vector<size_t> box_faces = {
+         3, 0, 4,    3, 4, 7, // -x
+         6, 5, 1,    6, 1, 2, // +x
+         4, 0, 1,    4, 1, 5, // -y
+         3, 7, 6,    3, 6, 2, // +y
+         2, 1, 0,    2, 0, 3, // -z
+         7, 4, 5,    7, 5, 6, // +z
     };
+    // clang-format on
 
     const std::vector<glm::vec3> tri_verts {
         glm::vec3(-1.0f, -1.0f, -1.0f),
@@ -290,9 +272,9 @@ int main()
             collider = std::make_unique<wuzy::SphereCollider>(half_box_size);
         } else if (type == Obstacle::Type::Triangle) {
             collider = std::make_unique<wuzy::TriangleCollider>(
-                vec3(tri_verts[0]), vec3(tri_verts[1]), vec3(tri_verts[2]));
+                tri_verts[0], tri_verts[1], tri_verts[2]);
         }
-        collider->set_transform(mat4((trafo.getMatrix())));
+        collider->set_transform(trafo.getMatrix());
         const auto bp_node = broadphase.insert(*collider);
         obstacles.push_back(Obstacle { std::move(trafo), std::move(collider), bp_node, type });
         obstacle_idx_map.emplace(bp_node.id, i);
@@ -371,13 +353,14 @@ int main()
             }
 
             player_trafo.move(vel);
-            player_collider.set_transform(mat4(player_trafo.getMatrix()));
+            player_collider.set_transform(player_trafo.getMatrix());
 
             // This is kind of racey, because the broadphase query depends on the transform of the
             // player collider, which is changed in the loop.
             // In a real game, you would do this totally differently (many possible ways)!
             broadphase.update(player_node);
-            bp_query.begin(player_collider.get_aabb());
+            const auto [aabb_min, aabb_max] = player_collider.get_aabb<glm::vec3>();
+            bp_query.begin(aabb_min, aabb_max);
             for (auto node : bp_query.all()) {
                 if (node.id == player_node.id) {
                     continue;
@@ -386,12 +369,13 @@ int main()
                 auto& obstacle = obstacles[obstacle_idx];
                 assert(obstacle.bp_node.id == node.id);
                 obstacle.candidate = true;
-                if (const auto col = wuzy::get_collision(player_collider, *obstacle.collider)) {
+                if (const auto col
+                    = wuzy::get_collision<glm::vec3>(player_collider, *obstacle.collider)) {
                     obstacle.collision = true;
-                    const auto mtv = -glm::vec3(col->normal.x, col->normal.y, col->normal.z)
+                    const auto mtv = -glm::vec3(col->normal[0], col->normal[1], col->normal[2])
                         * col->depth * 1.0f;
                     player_trafo.move(mtv);
-                    player_collider.set_transform(mat4(player_trafo.getMatrix()));
+                    player_collider.set_transform(player_trafo.getMatrix());
                     player_collision = true;
                 }
             }
@@ -451,18 +435,15 @@ int main()
         for (const auto& [aabb, depth] : aabbs) {
             const auto& color = aabb_colors[depth % aabb_colors.size()];
             const auto height_offset = glm::vec3(0.0f, depth * 0.3f, 0.0f);
-            debug_draw.aabb(color, vec3(aabb.min), vec3(aabb.max) + height_offset);
+            debug_draw.aabb(color, aabb.min, aabb.max + height_offset);
         }
 
-        const auto cam_pos = camera_trafo.getPosition();
-        const auto cam_fwd = camera_trafo.getForward();
-        const auto rc = bp_query.ray_cast(vec3(cam_pos), vec3(cam_fwd));
+        const auto rc = bp_query.ray_cast(camera_trafo.getPosition(), camera_trafo.getForward());
         if (rc) {
             const auto [node, res] = *rc;
-            const auto marker_pos = vec3(res.hit_position);
-            debug_draw.diamond(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), marker_pos, 0.05f);
-            debug_draw.arrow(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), marker_pos,
-                marker_pos + vec3(res.normal) * 0.2f);
+            debug_draw.diamond(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), res.hit_position, 0.05f);
+            debug_draw.arrow(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), res.hit_position,
+                res.hit_position + res.normal * 0.2f);
         }
 
         window.swap();

@@ -59,178 +59,261 @@ void deallocate(wuzy_allocator* alloc, T* ptr, size_t count = 1)
     return alloc->deallocate(ptr, sizeof(T) * count, alloc->ctx);
 }
 
-// wuzy_vec3/wuzy_vec4
+static constexpr int x = 0;
+static constexpr int y = 1;
+static constexpr int z = 2;
+static constexpr int w = 3;
 
-wuzy_vec3 add(const wuzy_vec3& a, const wuzy_vec3& b)
+struct vec3;
+
+struct vec3_view {
+    const float* data;
+
+    explicit vec3_view(const float v[3]) : data(v) { }
+    vec3_view(const vec3& v);
+
+    float operator[](size_t idx) const { return *(data + idx); }
+};
+
+struct vec3 {
+    float x, y, z;
+
+    float* data() { return &x; }
+    const float* data() const { return &x; }
+    float operator[](size_t idx) const { return *(&x + idx); }
+    float& operator[](size_t idx) { return *(&x + idx); }
+    vec3& operator=(const vec3_view& v)
+    {
+        x = v[0];
+        y = v[1];
+        z = v[2];
+        return *this;
+    }
+};
+
+vec3_view::vec3_view(const vec3& v) : data(&v.x) { }
+
+vec3_view v3(const float v[3])
 {
-    return wuzy_vec3 { a.x + b.x, a.y + b.y, a.z + b.z };
+    return vec3_view(v);
 }
 
-wuzy_vec3 sub(const wuzy_vec3& a, const wuzy_vec3& b)
+struct vec4 {
+    float x, y, z, w;
+};
+
+struct vec4_view {
+    const float* data;
+
+    explicit vec4_view(const float v[4]) : data(v) { }
+    vec4_view(const vec4& v) : data(&v.x) { }
+
+    float operator[](size_t idx) const { return *(data + idx); }
+};
+
+vec3 make_vec3(const float v[3])
 {
-    return wuzy_vec3 { a.x - b.x, a.y - b.y, a.z - b.z };
+    return { v[x], v[y], v[z] };
 }
 
-float dot(const wuzy_vec3& a, const wuzy_vec3& b)
+void copy(float dst[3], vec3_view src)
 {
-    return a.x * b.x + a.y * b.y + a.z * b.z;
+    std::memcpy(dst, src.data, sizeof(float) * 3);
 }
 
-float dot(const wuzy_vec4& a, const wuzy_vec4& b)
+vec3 add(vec3_view a, vec3_view b)
 {
-    return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+    return vec3 { a[x] + b[x], a[y] + b[y], a[z] + b[z] };
 }
 
-wuzy_vec3 cross(const wuzy_vec3& a, const wuzy_vec3& b)
+vec3 sub(vec3_view a, vec3_view b)
 {
-    return wuzy_vec3 {
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x,
+    return vec3 { a[x] - b[x], a[y] - b[y], a[z] - b[z] };
+}
+
+float dot(vec3_view a, vec3_view b)
+{
+    return a[x] * b[x] + a[y] * b[y] + a[z] * b[z];
+}
+
+float dot(vec4_view a, vec4_view b)
+{
+    return a[x] * b[x] + a[y] * b[y] + a[z] * b[z] + a[w] * b[w];
+}
+
+vec3 cross(vec3_view a, vec3_view b)
+{
+    return vec3 {
+        a[y] * b[z] - a[z] * b[y],
+        a[z] * b[x] - a[x] * b[z],
+        a[x] * b[y] - a[y] * b[x],
     };
 }
 
-float length(const wuzy_vec3& v)
+float length(vec3_view v)
 {
     return std::sqrt(dot(v, v));
 }
 
-float length(const wuzy_vec4& v)
+float length(vec4_view v)
 {
     return std::sqrt(dot(v, v));
 }
 
-wuzy_vec3 mul(const wuzy_vec3& v, float s)
+vec3 mul(vec3_view v, float s)
 {
-    return wuzy_vec3 { v.x * s, v.y * s, v.z * s };
+    return vec3 { v[x] * s, v[y] * s, v[z] * s };
 }
 
-wuzy_vec4 mul(const wuzy_vec4& v, float s)
+vec4 mul(vec4_view v, float s)
 {
-    return wuzy_vec4 { v.x * s, v.y * s, v.z * s, v.w * s };
+    return vec4 { v[x] * s, v[y] * s, v[z] * s, v[w] * s };
 }
 
-wuzy_vec3 normalize(const wuzy_vec3& v)
+vec3 normalize(vec3_view v)
 {
     const auto len = length(v);
-    return wuzy_vec3 { v.x / len, v.y / len, v.z / len };
+    return vec3 { v[x] / len, v[y] / len, v[z] / len };
 }
 
-[[maybe_unused]] bool is_finite(const wuzy_vec3& v)
+[[maybe_unused]] bool is_finite(vec3_view v)
 {
-    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+    return std::isfinite(v[x]) && std::isfinite(v[y]) && std::isfinite(v[z]);
 }
 
-// wuzy_mat4
-
-wuzy_mat4 transpose(const wuzy_mat4& m)
+vec3 vmin(vec3_view a, vec3_view b)
 {
-    const auto& c = m.cols;
+    return { std::min(a[x], b[x]), std::min(a[y], b[y]), std::min(a[z], b[z]) };
+}
+
+vec3 vmax(vec3_view a, vec3_view b)
+{
+    return { std::max(a[x], b[x]), std::max(a[y], b[y]), std::max(a[z], b[z]) };
+}
+
+// Matrix operations (column-major 4x4)
+
+struct mat4 {
+    vec4 cols[4];
+
+    vec4& operator[](size_t idx) { return cols[idx]; }
+    const vec4& operator[](size_t idx) const { return cols[idx]; }
+};
+
+struct mat4_view {
+    const float* data;
+
+    explicit mat4_view(const float v[16]) : data(v) { }
+    mat4_view(const mat4& v) : data(&v.cols[0].x) { }
+
+    vec4_view operator[](size_t idx) const { return vec4_view(data + idx * 4); }
+};
+
+mat4_view m4(const float m[16])
+{
+    return mat4_view(m);
+}
+
+mat4 transpose(mat4_view m)
+{
     return {
-        wuzy_vec4 { c[0].x, c[1].x, c[2].x, c[3].x },
-        wuzy_vec4 { c[0].y, c[1].y, c[2].y, c[3].y },
-        wuzy_vec4 { c[0].z, c[1].z, c[2].z, c[3].z },
-        wuzy_vec4 { c[0].w, c[1].w, c[2].w, c[3].w },
+        vec4 { m[0][x], m[1][x], m[2][x], m[3][x] },
+        vec4 { m[0][y], m[1][y], m[2][y], m[3][y] },
+        vec4 { m[0][z], m[1][z], m[2][z], m[3][z] },
+        vec4 { m[0][w], m[1][w], m[2][w], m[3][w] },
     };
 }
 
-wuzy_mat4 mul(const wuzy_mat4& a, const wuzy_mat4& b)
+void copy(float dst[16], mat4_view src)
+{
+    std::memcpy(dst, src.data, sizeof(float) * 16);
+}
+
+mat4 mul(mat4_view a, mat4_view b)
 {
     const auto tr = transpose(a);
     const auto& r = tr.cols; // a rows
-    const auto c = b.cols; // b columns
-    return wuzy_mat4 {
-        wuzy_vec4 { dot(r[0], c[0]), dot(r[1], c[0]), dot(r[2], c[0]), dot(r[3], c[0]) },
-        wuzy_vec4 { dot(r[0], c[1]), dot(r[1], c[1]), dot(r[2], c[1]), dot(r[3], c[1]) },
-        wuzy_vec4 { dot(r[0], c[2]), dot(r[1], c[2]), dot(r[2], c[2]), dot(r[3], c[2]) },
-        wuzy_vec4 { dot(r[0], c[3]), dot(r[1], c[3]), dot(r[2], c[3]), dot(r[3], c[3]) },
+    return mat4 {
+        vec4 { dot(r[0], b[0]), dot(r[1], b[0]), dot(r[2], b[0]), dot(r[3], b[0]) },
+        vec4 { dot(r[0], b[1]), dot(r[1], b[1]), dot(r[2], b[1]), dot(r[3], b[1]) },
+        vec4 { dot(r[0], b[2]), dot(r[1], b[2]), dot(r[2], b[2]), dot(r[3], b[2]) },
+        vec4 { dot(r[0], b[3]), dot(r[1], b[3]), dot(r[2], b[3]), dot(r[3], b[3]) },
     };
 }
 
-wuzy_vec3 mul(const wuzy_mat4& m, const wuzy_vec3& v, float w)
+vec3 mul(mat4_view m, vec3_view v, float w)
 {
     const auto tr = transpose(m);
     const auto& rows = tr.cols;
-    const auto vec = wuzy_vec4 { v.x, v.y, v.z, w };
-    return wuzy_vec3 { dot(rows[0], vec), dot(rows[1], vec), dot(rows[2], vec) };
+    const auto vec = vec4 { v[x], v[y], v[z], w };
+    return vec3 { dot(rows[0], vec), dot(rows[1], vec), dot(rows[2], vec) };
 }
 
-wuzy_mat4 identity()
+mat4 identity()
 {
     return {
-        wuzy_vec4 { 1.0f, 0.0f, 0.0f, 0.0f },
-        wuzy_vec4 { 0.0f, 1.0f, 0.0f, 0.0f },
-        wuzy_vec4 { 0.0f, 0.0f, 1.0f, 0.0f },
-        wuzy_vec4 { 0.0f, 0.0f, 0.0f, 1.0f },
+        vec4 { 1.0f, 0.0f, 0.0f, 0.0f },
+        vec4 { 0.0f, 1.0f, 0.0f, 0.0f },
+        vec4 { 0.0f, 0.0f, 1.0f, 0.0f },
+        vec4 { 0.0f, 0.0f, 0.0f, 1.0f },
     };
 }
 
-// wuzy_aabb
+// AABB
 
-bool overlap(const wuzy_aabb& a, const wuzy_aabb& b)
+struct Aabb {
+    vec3 min, max;
+};
+
+bool overlap(const Aabb& a, const Aabb& b)
 {
     return a.min.x <= b.max.x && a.min.y <= b.max.y && a.min.z <= b.max.z && a.max.x >= b.min.x
         && a.max.y >= b.min.y && a.max.z >= b.min.z;
 }
 
-bool contains(const wuzy_aabb& aabb, const wuzy_vec3& p)
+bool contains(const Aabb& aabb, const vec3_view& p)
 {
-    return p.x >= aabb.min.x && p.y >= aabb.min.y && p.z >= aabb.min.z && p.x <= aabb.max.x
-        && p.y <= aabb.max.y && p.z <= aabb.max.z;
+    return p[x] >= aabb.min.x && p[y] >= aabb.min.y && p[z] >= aabb.min.z && p[x] <= aabb.max.x
+        && p[y] <= aabb.max.y && p[z] <= aabb.max.z;
 }
 
-wuzy_aabb combine(const wuzy_aabb& a, const wuzy_aabb& b)
+Aabb combine(const Aabb& a, const Aabb& b)
 {
-    return wuzy_aabb {
-        wuzy_vec3 {
-            std::min(a.min.x, b.min.x),
-            std::min(a.min.y, b.min.y),
-            std::min(a.min.z, b.min.z),
-        },
-        wuzy_vec3 {
-            std::max(a.max.x, b.max.x),
-            std::max(a.max.y, b.max.y),
-            std::max(a.max.z, b.max.z),
-        },
-    };
+    return Aabb { vmin(a.min, b.min), vmax(a.max, b.max) };
 }
 
-[[maybe_unused]] float volume(const wuzy_aabb& aabb)
+[[maybe_unused]] float volume(const Aabb& aabb)
 {
     const auto s = sub(aabb.max, aabb.min);
     return s.x * s.y * s.z;
 }
 
-bool ray_cast(const wuzy_aabb& aabb, const wuzy_vec3& start, const wuzy_vec3& direction,
-    wuzy_ray_cast_result* res)
+// TODO: Check how this is used and change interface
+bool ray_cast(const Aabb& aabb, vec3_view start, vec3_view dir, wuzy_ray_cast_result* res)
 {
     // Real-Time Collision Detection, 5.3.3
     // This could be made much faster if we extend the ray data:
     // https://knork.org/fast-AABB-test.html
-    static const wuzy_vec3 axes[3] {
-        wuzy_vec3 { 1.0f, 0.0f, 0.0f },
-        wuzy_vec3 { 0.0f, 1.0f, 0.0f },
-        wuzy_vec3 { 0.0f, 0.0f, 1.0f },
+    static const vec3 axes[3] = {
+        { 1.0f, 0.0f, 0.0f },
+        { 0.0f, 1.0f, 0.0f },
+        { 0.0f, 0.0f, 1.0f },
     };
-    const float ood[3] = { 1.0f / direction.x, 1.0f / direction.y, 1.0f / direction.z };
-    const float* min = &aabb.min.x;
-    const float* max = &aabb.max.x;
-    const float* dir = &direction.x;
-    const float* pos = &start.x;
+    const vec3 ood = { 1.0f / dir[x], 1.0f / dir[y], 1.0f / dir[z] };
 
     float tmin = 0.0f;
     float tmax = FLT_MAX;
     for (size_t axis = 0; axis < 3; ++axis) {
         if (std::abs(dir[axis]) < FLT_EPSILON) {
             // Ray is parallel to slab. No hit if origin not within slab.
-            if (pos[axis] < min[axis] || pos[axis] > max[axis]) {
+            if (start[axis] < aabb.min[axis] || start[axis] > aabb.max[axis]) {
                 return false;
             }
         } else {
             // Compute intersection t value of ray with near and far plane of slab
             float normal_sign = 1.0f;
-            float t1 = (min[axis] - pos[axis]) * ood[axis];
-            float t2 = (max[axis] - pos[axis]) * ood[axis];
+            float t1 = (aabb.min[axis] - start[axis]) * ood[axis];
+            float t2 = (aabb.max[axis] - start[axis]) * ood[axis];
             // Make t1 be intersection with near plane t2 with far plane
             if (t1 > t2) {
                 std::swap(t1, t2);
@@ -238,7 +321,7 @@ bool ray_cast(const wuzy_aabb& aabb, const wuzy_vec3& start, const wuzy_vec3& di
             }
             if (t1 > tmin) {
                 tmin = t1;
-                res->normal = mul(axes[axis], normal_sign);
+                copy(res->normal, mul(axes[axis], normal_sign));
             }
             if (t2 < tmax) {
                 tmax = t2;
@@ -250,7 +333,7 @@ bool ray_cast(const wuzy_aabb& aabb, const wuzy_vec3& start, const wuzy_vec3& di
         }
     }
     res->t = tmin;
-    res->hit_position = add(start, mul(direction, res->t));
+    copy(res->hit_position, add(start, mul(dir, res->t)));
     return true;
 }
 
@@ -312,179 +395,220 @@ private:
 };
 }
 
-EXPORT wuzy_mat4 wuzy_invert_trs(const wuzy_mat4* m)
+EXPORT void wuzy_invert_trs(const float mat[16], float inv[16])
 {
     // inv(TRS) = inv(S) * inv(R) * inv(T) = inv(S) * transpose(R) * inv(T)
-    const auto sx = length(m->cols[0]);
-    const auto sy = length(m->cols[1]);
-    const auto sz = length(m->cols[2]);
+    const auto m = m4(mat);
+    const auto sx = length(m[0]);
+    const auto sy = length(m[1]);
+    const auto sz = length(m[2]);
 
-    const auto r = wuzy_mat4 {
-        mul(m->cols[0], 1.0f / sx),
-        mul(m->cols[1], 1.0f / sy),
-        mul(m->cols[2], 1.0f / sz),
-        wuzy_vec4 { 0.0f, 0.0f, 0.0f, 1.0f },
+    // To get the rotation matrix, we take the 3x3 upper left block and
+    // divide out the scale matrix.
+    const mat4 r = {
+        mul(m[0], 1.0f / sx),
+        mul(m[1], 1.0f / sy),
+        mul(m[2], 1.0f / sz),
+        vec4 { 0.0f, 0.0f, 0.0f, 1.0f },
     };
 
-    auto s = identity();
-    s.cols[0].x = 1.0f / sx;
-    s.cols[1].y = 1.0f / sy;
-    s.cols[2].z = 1.0f / sz;
+    // Because the rotation matrix is orthogonal, its inverse is its transpose.
+    const auto inv_r = transpose(r);
 
-    auto t = identity();
-    t.cols[3] = mul(m->cols[3], -1.0f);
+    // We just build a scale matrix with the inverse scale factors
+    auto inv_s = identity();
+    inv_s.cols[0].x = 1.0f / sx;
+    inv_s.cols[1].y = 1.0f / sy;
+    inv_s.cols[2].z = 1.0f / sz;
 
-    return mul(mul(s, transpose(r)), t);
+    auto inv_t = identity();
+    inv_t.cols[3] = mul(m[3], -1.0f);
+
+    copy(inv, mul(mul(inv_s, inv_r), inv_t));
 }
 
-EXPORT void wuzy_collider_set_transform(wuzy_collider* collider, const wuzy_mat4* transform)
+EXPORT void wuzy_collider_set_transform(wuzy_collider* collider, const float transform[16])
 {
-    collider->transform = *transform;
-    collider->inverse_transform = wuzy_invert_trs(transform);
+    copy(collider->transform, m4(transform));
+    wuzy_invert_trs(transform, collider->inverse_transform);
 }
 
-EXPORT wuzy_vec3 wuzy_collider_support(const wuzy_collider* collider, wuzy_vec3 direction)
+static vec3 collider_support(const wuzy_collider* collider, vec3_view dir)
 {
-    const auto local_dir = mul(collider->inverse_transform, direction, 0.0f);
-    const auto local_sup = collider->support_func(collider->userdata, local_dir);
-    return mul(collider->transform, local_sup, 1.0f);
+    const auto local_dir = mul(m4(collider->inverse_transform), dir, 0.0f);
+    vec3 local_sup;
+    collider->support_func(collider->userdata, local_dir.data(), local_sup.data());
+    // Transform support point back to world space
+    return mul(m4(collider->transform), local_sup, 1.0f);
 }
 
-EXPORT bool wuzy_collider_ray_cast(const wuzy_collider* collider, wuzy_vec3 start,
-    wuzy_vec3 direction, wuzy_ray_cast_result* result)
+EXPORT void wuzy_collider_support(const wuzy_collider* collider, const float dir[3], float sup[3])
 {
-    const auto start_local = mul(collider->inverse_transform, start, 1.0f);
-    const auto dir_local = mul(collider->inverse_transform, direction, 0.0f);
-    const auto res = collider->ray_cast_func(collider->userdata, start_local, dir_local, result);
-    result->normal = mul(collider->transform, result->normal, 0.0f);
-    result->hit_position = mul(collider->transform, result->hit_position, 1.0f);
-    return res;
+    copy(sup, collider_support(collider, v3(dir)));
 }
 
-EXPORT wuzy_aabb wuzy_collider_get_aabb(const wuzy_collider* collider)
+EXPORT bool wuzy_collider_ray_cast(const wuzy_collider* collider, const float start[3],
+    const float dir[3], wuzy_ray_cast_result* result)
+{
+    const auto inv_trafo = m4(collider->inverse_transform);
+    const auto start_local = mul(inv_trafo, v3(start), 1.0f);
+    const auto dir_local = mul(inv_trafo, v3(dir), 0.0f);
+
+    // Ray cast in local space
+    wuzy_ray_cast_result local_result;
+    if (!collider->ray_cast_func(
+            collider->userdata, start_local.data(), dir_local.data(), &local_result)) {
+        return false;
+    }
+
+    // Transform results back to world space
+    const auto trafo = m4(collider->transform);
+    copy(result->hit_position, mul(trafo, v3(local_result.hit_position), 1.0f));
+    copy(result->normal, normalize(mul(trafo, v3(local_result.normal), 0.0f)));
+    result->t = local_result.t;
+    return true;
+}
+
+static Aabb collider_get_aabb(const wuzy_collider* collider)
 {
     // http://allenchou.net/2014/02/game-physics-updating-aabbs-for-polyhedrons/
-    wuzy_aabb aabb;
+    Aabb aabb;
     // TODO: Check whether this is optimized and if not, do it myself.
     // By passing base vectors, we are essentially using columns of the inverse transform for the
     // local direction.
-    aabb.min.x = wuzy_collider_support(collider, wuzy_vec3 { -1.0f, 0.0f, 0.0f }).x;
-    aabb.min.y = wuzy_collider_support(collider, wuzy_vec3 { 0.0f, -1.0f, 0.0f }).y;
-    aabb.min.z = wuzy_collider_support(collider, wuzy_vec3 { 0.0f, 0.0f, -1.0f }).z;
-    aabb.max.x = wuzy_collider_support(collider, wuzy_vec3 { 1.0f, 0.0f, 0.0f }).x;
-    aabb.max.y = wuzy_collider_support(collider, wuzy_vec3 { 0.0f, 1.0f, 0.0f }).y;
-    aabb.max.z = wuzy_collider_support(collider, wuzy_vec3 { 0.0f, 0.0f, 1.0f }).z;
+    aabb.min.x = collider_support(collider, vec3 { -1.0f, 0.0f, 0.0f }).x;
+    aabb.min.y = collider_support(collider, vec3 { 0.0f, -1.0f, 0.0f }).y;
+    aabb.min.z = collider_support(collider, vec3 { 0.0f, 0.0f, -1.0f }).z;
+    aabb.max.x = collider_support(collider, vec3 { 1.0f, 0.0f, 0.0f }).x;
+    aabb.max.y = collider_support(collider, vec3 { 0.0f, 1.0f, 0.0f }).y;
+    aabb.max.z = collider_support(collider, vec3 { 0.0f, 0.0f, 1.0f }).z;
     return aabb;
 }
 
-EXPORT bool wuzy_calculate_normals(const wuzy_vec3* vertices, size_t num_vertices,
-    const wuzy_face_indices* face_indices, size_t num_faces, wuzy_vec3* normals)
+EXPORT void wuzy_collider_get_aabb(const wuzy_collider* collider, float min[3], float max[3])
 {
-    for (size_t f = 0; f < num_faces; ++f) {
-        const auto& i = face_indices[f];
-        if (i.i0 >= num_vertices || i.i1 >= num_vertices || i.i2 >= num_vertices) {
+    const auto aabb = collider_get_aabb(collider);
+    copy(min, aabb.min);
+    copy(max, aabb.max);
+}
+
+static void calculate_normal(
+    float normal[3], const float v0[3], const float v1[3], const float v2[3])
+{
+    copy(normal, normalize(cross(sub(v3(v1), v3(v0)), sub(v3(v2), v3(v0)))));
+}
+
+EXPORT bool wuzy_calculate_normals(const float* vertices, size_t num_vertices,
+    const size_t* face_indices, size_t num_faces, float* normals)
+{
+    for (size_t i = 0; i < num_faces; i++) {
+        size_t i0 = face_indices[i * 3];
+        size_t i1 = face_indices[i * 3 + 1];
+        size_t i2 = face_indices[i * 3 + 2];
+
+        if (i0 >= num_vertices || i1 >= num_vertices || i2 >= num_vertices) {
             return false;
         }
-        const auto& v0 = vertices[i.i0];
-        const auto& v1 = vertices[i.i1];
-        const auto& v2 = vertices[i.i2];
-        normals[f] = normalize(cross(sub(v1, v0), sub(v2, v0)));
+
+        calculate_normal(normals + i * 3, vertices + i0 * 3, vertices + i1 * 3, vertices + i2 * 3);
     }
+
     return true;
 }
 
 EXPORT void wuzy_triangle_collider_init(
     wuzy_collider* collider, wuzy_triangle_collider_userdata* userdata)
 {
-    assert(is_finite(userdata->vertices[0]));
-    assert(is_finite(userdata->vertices[1]));
-    assert(is_finite(userdata->vertices[2]));
-    userdata->normal = cross(sub(userdata->vertices[1], userdata->vertices[0]),
-        sub(userdata->vertices[2], userdata->vertices[0]));
-    collider->transform = identity();
-    collider->inverse_transform = identity();
+    assert(is_finite(v3(userdata->vertices[0])));
+    assert(is_finite(v3(userdata->vertices[1])));
+    assert(is_finite(v3(userdata->vertices[2])));
+
+    copy(collider->transform, identity());
+    copy(collider->inverse_transform, identity());
     collider->userdata = userdata;
     collider->support_func = wuzy_triangle_collider_support;
     collider->ray_cast_func = wuzy_triangle_collider_ray_cast;
+    calculate_normal(
+        userdata->normal, userdata->vertices[0], userdata->vertices[1], userdata->vertices[2]);
 }
 
-EXPORT wuzy_vec3 wuzy_triangle_collider_support(const void* userdata, wuzy_vec3 direction)
+EXPORT void wuzy_triangle_collider_support(const void* userdata, const float dir[3], float sup[3])
 {
-    const auto& tri = *reinterpret_cast<const wuzy_triangle_collider_userdata*>(userdata);
-    wuzy_vec3 max_vtx;
+    const auto& tri = *static_cast<const wuzy_triangle_collider_userdata*>(userdata);
     float max_dot = -FLT_MAX;
-    for (size_t i = 0; i < 3; ++i) {
-        const auto d = dot(tri.vertices[i], direction);
+    for (int i = 0; i < 3; i++) {
+        float d = dot(v3(tri.vertices[i]), v3(dir));
         if (d > max_dot) {
             max_dot = d;
-            max_vtx = tri.vertices[i];
+            copy(sup, v3(tri.vertices[i]));
         }
     }
-    return max_vtx;
 }
 
 EXPORT bool wuzy_triangle_collider_ray_cast(
-    const void* userdata, wuzy_vec3 start, wuzy_vec3 direction, wuzy_ray_cast_result* result)
+    const void* userdata, const float start[3], const float dir[3], wuzy_ray_cast_result* result)
 {
     // Real-Time Collision Detection, 5.3.6
     // This is essentially Möller-Trumbore, but with using the scalar triple product identify a few
     // times and pre-calculating the normal.
-    const auto& tri = *reinterpret_cast<const wuzy_triangle_collider_userdata*>(userdata);
+    const auto& tri = *static_cast<const wuzy_triangle_collider_userdata*>(userdata);
 
     // Check if ray points in direction of triangle normal (or is coplanar)
-    const auto d = -dot(tri.normal, direction);
+    const auto d = -dot(v3(tri.normal), v3(dir));
     if (d <= FLT_EPSILON) {
         return false;
     }
 
     // Check which half space the ray origin is in
-    const auto s = sub(start, tri.vertices[0]);
-    const auto t = dot(tri.normal, s);
+    const auto s = sub(v3(start), v3(tri.vertices[0]));
+    const auto t = dot(v3(tri.normal), s);
     if (t < 0.0f) {
         return false;
     }
 
     // Compute barycentric coordinates of intersection
-    const auto e = cross(direction, s);
-    const auto v = -dot(sub(tri.vertices[2], tri.vertices[0]), e);
+    const auto e = cross(v3(dir), s);
+    const auto v = -dot(sub(v3(tri.vertices[2]), v3(tri.vertices[0])), e);
     if (v < 0.0f || v > d) {
         return false;
     }
-    const auto w = dot(sub(tri.vertices[1], tri.vertices[0]), e);
+
+    const auto w = dot(sub(v3(tri.vertices[1]), v3(tri.vertices[0])), e);
     if (w < 0.0f || v + w > d) {
         return false;
     }
 
     result->t = t / d;
-    result->normal = normalize(tri.normal); // tri.normal is not normalized!
-    result->hit_position = add(start, mul(direction, result->t));
+    copy(result->normal, normalize(v3(tri.normal))); // tri.normal is not normalized!
+    copy(result->hit_position, add(v3(start), mul(v3(dir), result->t)));
     return true;
 }
 
+// Sphere collider
 EXPORT void wuzy_sphere_collider_init(
     wuzy_collider* collider, wuzy_sphere_collider_userdata* userdata)
 {
-    collider->transform = identity();
-    collider->inverse_transform = identity();
+    copy(collider->transform, identity());
+    copy(collider->inverse_transform, identity());
     collider->userdata = userdata;
     collider->support_func = wuzy_sphere_collider_support;
     collider->ray_cast_func = wuzy_sphere_collider_ray_cast;
 }
 
-EXPORT wuzy_vec3 wuzy_sphere_collider_support(const void* userdata, wuzy_vec3 direction)
+EXPORT void wuzy_sphere_collider_support(const void* userdata, const float dir[3], float sup[3])
 {
-    const auto& sphere = *reinterpret_cast<const wuzy_sphere_collider_userdata*>(userdata);
-    return mul(normalize(direction), sphere.radius);
+    const auto& sphere = *static_cast<const wuzy_sphere_collider_userdata*>(userdata);
+    copy(sup, mul(normalize(v3(dir)), sphere.radius));
 }
 
 EXPORT bool wuzy_sphere_collider_ray_cast(
-    const void* userdata, wuzy_vec3 start, wuzy_vec3 direction, wuzy_ray_cast_result* result)
+    const void* userdata, const float start[3], const float dir[3], wuzy_ray_cast_result* result)
 {
     const auto& sphere = *reinterpret_cast<const wuzy_sphere_collider_userdata*>(userdata);
 
     // Real-Time Collision Detection, 5.3.2
-    const auto b = dot(start, direction);
-    const auto c = dot(start, start) - sphere.radius * sphere.radius;
+    const auto b = dot(v3(start), v3(dir));
+    const auto c = dot(v3(start), v3(start)) - sphere.radius * sphere.radius;
     // ray starts outside sphere and points away from it or ray starts inside the sphere
     if ((c > 0.0f && b > 0.0f) || c < 0.0f) {
         return false;
@@ -496,63 +620,57 @@ EXPORT bool wuzy_sphere_collider_ray_cast(
     }
 
     result->t = std::max(0.0f, -b - std::sqrt(discr));
-    result->hit_position = add(start, mul(direction, result->t));
-    result->normal = normalize(result->hit_position);
+    copy(result->hit_position, add(v3(start), mul(v3(dir), result->t)));
+    copy(result->normal, normalize(v3(result->hit_position)));
     return true;
 }
 
+// Convex polyhedron collider
 EXPORT void wuzy_convex_polyhedron_collider_init(
     wuzy_collider* collider, wuzy_convex_polyhedron_collider_userdata* userdata)
 {
     wuzy_calculate_normals(userdata->vertices, userdata->num_vertices, userdata->face_indices,
         userdata->num_faces, userdata->normals);
-    collider->transform = identity();
-    collider->inverse_transform = identity();
+    copy(collider->transform, identity());
+    copy(collider->inverse_transform, identity());
     collider->userdata = userdata;
     collider->support_func = wuzy_convex_polyhedron_collider_support;
     collider->ray_cast_func = wuzy_convex_polyhedron_collider_ray_cast;
 }
 
-EXPORT wuzy_vec3 wuzy_convex_polyhedron_collider_support(const void* userdata, wuzy_vec3 direction)
+EXPORT void wuzy_convex_polyhedron_collider_support(
+    const void* userdata, const float dir[3], float sup[3])
 {
-    // This is one of the most expensive steps of the GJK algorithm. There are ways to improve the
-    // complexity of this function to O(log N) by hill climbing for extreme vertices, where vertices
-    // are stored in a data structure which allows easy querying for neighbouring vertices (would be
-    // trivial in 2D). This requires a good bit more work and it's tricky to avoid infinite loops,
-    // so I won't do it until I need it.
-
-    // The convexity of the polyhedron provides that the supporting point is always one of the
-    // vertices, so it is enough to simply check all of them.
-    const auto& poly = *reinterpret_cast<const wuzy_convex_polyhedron_collider_userdata*>(userdata);
+    const auto& poly = *static_cast<const wuzy_convex_polyhedron_collider_userdata*>(userdata);
     assert(poly.num_vertices > 0);
-    wuzy_vec3 max_vtx;
     float max_dot = -FLT_MAX;
-    for (size_t i = 0; i < poly.num_vertices; ++i) {
-        const auto d = dot(poly.vertices[i], direction);
+    for (size_t i = 0; i < poly.num_vertices; i++) {
+        const auto v = v3(poly.vertices + i * 3);
+        float d = dot(v, v3(dir));
         if (d > max_dot) {
             max_dot = d;
-            max_vtx = poly.vertices[i];
+            copy(sup, v);
         }
     }
-    return max_vtx;
 }
 
 EXPORT bool wuzy_convex_polyhedron_collider_ray_cast(
-    const void* userdata, wuzy_vec3 start, wuzy_vec3 direction, wuzy_ray_cast_result* result)
+    const void* userdata, const float start[3], const float dir[3], wuzy_ray_cast_result* result)
 {
     const auto& poly = *reinterpret_cast<const wuzy_convex_polyhedron_collider_userdata*>(userdata);
+
     // Real-Time Collision Detection, 5.3.8
     float tfirst = 0.0f;
     float tlast = std::numeric_limits<float>::max();
-    wuzy_vec3 normal;
     // Check ray against each half-space defined by each face
     for (size_t f = 0; f < poly.num_faces; ++f) {
-        const auto& n = poly.normals[f];
-        const auto& v0 = poly.vertices[poly.face_indices[f].i0];
+        const auto n = v3(poly.normals + f * 3);
+        const auto i0 = poly.face_indices[f * 3 + 0];
+        const auto v0 = v3(poly.vertices + i0 * 3);
         const auto d = dot(v0, n);
 
-        const auto denom = dot(n, direction);
-        const auto dist = d - dot(n, start);
+        const auto denom = dot(n, v3(dir));
+        const auto dist = d - dot(n, v3(start));
         if (denom == 0.0f) {
             // Ray is parallel to the face
             if (dist > 0.0f) {
@@ -564,7 +682,7 @@ EXPORT bool wuzy_convex_polyhedron_collider_ray_cast(
                 // Entering half-space
                 if (t > tfirst) {
                     tfirst = t;
-                    normal = n;
+                    copy(result->normal, n);
                 }
             } else {
                 // Exiting half-space
@@ -578,32 +696,86 @@ EXPORT bool wuzy_convex_polyhedron_collider_ray_cast(
         }
     }
     result->t = tfirst;
-    result->normal = normal;
-    result->hit_position = add(start, mul(direction, result->t));
+    copy(result->hit_position, add(v3(start), mul(v3(dir), result->t)));
     return true;
 }
 
 namespace {
 // Support function of the minkowski difference `a - b`.
-wuzy_vec3 support(const wuzy_collider* a, const wuzy_collider* b, const wuzy_vec3& direction)
+vec3 support(const wuzy_collider* a, const wuzy_collider* b, vec3_view dir)
 {
-    const auto a_sup = wuzy_collider_support(a, direction);
-    const auto b_sup = wuzy_collider_support(b, mul(direction, -1.0f));
+    const auto a_sup = collider_support(a, dir);
+    const auto b_sup = collider_support(b, mul(dir, -1.0f));
     return sub(a_sup, b_sup);
 }
 
-bool same_half_space(const wuzy_vec3& a, const wuzy_vec3& b)
+bool same_half_space(vec3_view a, vec3_view b)
 {
     return dot(a, b) > 0.0f;
 }
 
+wuzy_simplex3d make_simplex(vec3_view v0)
+{
+    wuzy_simplex3d simplex;
+    copy(simplex.vertices[0], v0);
+    simplex.num_vertices = 1;
+    return simplex;
+}
+
+wuzy_simplex3d make_simplex(vec3_view v0, vec3_view v1)
+{
+    wuzy_simplex3d simplex;
+    copy(simplex.vertices[0], v0);
+    copy(simplex.vertices[1], v1);
+    simplex.num_vertices = 2;
+    return simplex;
+}
+
+wuzy_simplex3d make_simplex(vec3_view v0, vec3_view v1, vec3_view v2)
+{
+    wuzy_simplex3d simplex;
+    copy(simplex.vertices[0], v0);
+    copy(simplex.vertices[1], v1);
+    copy(simplex.vertices[2], v2);
+    simplex.num_vertices = 3;
+    return simplex;
+}
+
 struct NextSimplexResult {
     wuzy_simplex3d simplex;
-    wuzy_vec3 direction;
+    vec3 direction;
     bool contains_origin;
+
+    NextSimplexResult(const wuzy_simplex3d& s, vec3_view dir, bool orig = false)
+        : simplex(s)
+        , contains_origin(orig)
+    {
+        copy(&direction.x, dir);
+    }
+
+    NextSimplexResult(vec3_view v0, vec3_view dir)
+        : simplex(make_simplex(v0))
+        , contains_origin(false)
+    {
+        copy(&direction.x, dir);
+    }
+
+    NextSimplexResult(vec3_view v0, vec3_view v1, vec3_view dir)
+        : simplex(make_simplex(v0, v1))
+        , contains_origin(false)
+    {
+        copy(&direction.x, dir);
+    }
+
+    NextSimplexResult(vec3_view v0, vec3_view v1, vec3_view v2, vec3_view dir)
+        : simplex(make_simplex(v0, v1, v2))
+        , contains_origin(false)
+    {
+        copy(&direction.x, dir);
+    }
 };
 
-NextSimplexResult line(const wuzy_simplex3d& simplex, const wuzy_vec3& /*direction*/)
+NextSimplexResult line(const wuzy_simplex3d& simplex, vec3_view /*direction*/)
 {
     /*
      *            .           .
@@ -627,8 +799,8 @@ NextSimplexResult line(const wuzy_simplex3d& simplex, const wuzy_vec3& /*directi
     // expect the origin to be in the half-space at b in the direction of b -> a (<1> or <2>,
     // not <3>).
     assert(simplex.num_vertices == 2);
-    const auto a = simplex.vertices[0];
-    const auto b = simplex.vertices[1];
+    const auto a = v3(simplex.vertices[0]);
+    const auto b = v3(simplex.vertices[1]);
     const auto ab = sub(b, a);
     const auto ao = mul(a, -1.0f);
     // We need to check whether the origin is between a and b (<1>) or "after" a (in the
@@ -646,11 +818,11 @@ NextSimplexResult line(const wuzy_simplex3d& simplex, const wuzy_vec3& /*directi
             // https://box2d.org/posts/2014/02/computing-a-basis/
             dir = normalize(ab);
             assert(is_finite(dir));
-            dir = std::abs(dir.x) >= 0.57735f ? wuzy_vec3 { dir.y, -dir.x, 0.0f }
-                                              : wuzy_vec3 { 0.0f, dir.z, -dir.y };
+            dir = std::abs(dir.x) >= 0.57735f ? vec3 { dir.y, -dir.x, 0.0f }
+                                              : vec3 { 0.0f, dir.z, -dir.y };
         }
         assert(length(dir) > FLT_EPSILON);
-        return { simplex, dir, false };
+        return { simplex, dir };
     } else {
         // <2>
         // If ao and ab are not in the same half-space, the origin is "after"/"beyond" a (<2>).
@@ -658,11 +830,11 @@ NextSimplexResult line(const wuzy_simplex3d& simplex, const wuzy_vec3& /*directi
         // enclose the origin, so we throw it away.
         // We keep only a (because it more towards the origin) and search towards the origin
         // again.
-        return { wuzy_simplex3d { { a }, 1 }, ao, false };
+        return { a, ao };
     }
 }
 
-NextSimplexResult triangle(const wuzy_simplex3d& simplex, const wuzy_vec3& direction)
+NextSimplexResult triangle(const wuzy_simplex3d& simplex, vec3_view direction)
 {
     /*
      *                   .
@@ -698,9 +870,9 @@ NextSimplexResult triangle(const wuzy_simplex3d& simplex, const wuzy_vec3& direc
      */
 
     assert(simplex.num_vertices == 3);
-    const auto a = simplex.vertices[0];
-    const auto b = simplex.vertices[1];
-    const auto c = simplex.vertices[2];
+    const auto a = v3(simplex.vertices[0]);
+    const auto b = v3(simplex.vertices[1]);
+    const auto c = v3(simplex.vertices[2]);
 
     const auto ab = sub(b, a);
     const auto ac = sub(c, a);
@@ -723,10 +895,10 @@ NextSimplexResult triangle(const wuzy_simplex3d& simplex, const wuzy_vec3& direc
             // the origin.
             const auto dir = cross(cross(ac, ao), ac);
             assert(is_finite(dir) && length(dir) > FLT_EPSILON);
-            return { wuzy_simplex3d { { a, c }, 2 }, dir, false };
+            return { a, c, dir };
         } else {
             // <5>
-            return line(wuzy_simplex3d { { a, b }, 2 }, direction);
+            return line(make_simplex(a, b), direction);
         }
     }
 
@@ -734,7 +906,7 @@ NextSimplexResult triangle(const wuzy_simplex3d& simplex, const wuzy_vec3& direc
     // for region <4>.
     if (same_half_space(cross(ab, abc), ao)) {
         // <4>
-        return line(wuzy_simplex3d { { a, b }, 2 }, direction);
+        return line(make_simplex(a, b), direction);
     }
 
     // <2> or <3> are left
@@ -745,11 +917,11 @@ NextSimplexResult triangle(const wuzy_simplex3d& simplex, const wuzy_vec3& direc
     } else {
         // "below" the triangle
         // "rewind" the triangle to point "down" instead
-        return { wuzy_simplex3d { { a, c, b }, 3 }, mul(abc, -1.0f), false };
+        return { make_simplex(a, c, b), mul(abc, -1.0f) };
     }
 }
 
-NextSimplexResult tetrahedron(const wuzy_simplex3d& simplex, const wuzy_vec3& direction)
+NextSimplexResult tetrahedron(const wuzy_simplex3d& simplex, vec3_view direction)
 {
     /*
      * This is pretty bad, but I can't do it much better.
@@ -774,10 +946,10 @@ NextSimplexResult tetrahedron(const wuzy_simplex3d& simplex, const wuzy_vec3& di
      */
 
     assert(simplex.num_vertices == 4);
-    const auto a = simplex.vertices[0];
-    const auto b = simplex.vertices[1];
-    const auto c = simplex.vertices[2];
-    const auto d = simplex.vertices[3];
+    const auto a = v3(simplex.vertices[0]);
+    const auto b = v3(simplex.vertices[1]);
+    const auto c = v3(simplex.vertices[2]);
+    const auto d = v3(simplex.vertices[3]);
 
     const auto ab = sub(b, a);
     const auto ac = sub(c, a);
@@ -795,19 +967,19 @@ NextSimplexResult tetrahedron(const wuzy_simplex3d& simplex, const wuzy_vec3& di
     // be in the space defined by bcd (see first statement).
 
     if (same_half_space(abc, ao)) {
-        return triangle(wuzy_simplex3d { { a, b, c }, 3 }, direction);
+        return triangle(make_simplex(a, b, c), direction);
     }
     if (same_half_space(acd, ao)) {
-        return triangle(wuzy_simplex3d { { a, c, d }, 3 }, direction);
+        return triangle(make_simplex(a, c, d), direction);
     }
     if (same_half_space(adb, ao)) {
-        return triangle(wuzy_simplex3d { { a, d, b }, 3 }, direction);
+        return triangle(make_simplex(a, d, b), direction);
     }
 
     return { simplex, direction, true };
 }
 
-NextSimplexResult next_simplex(const wuzy_simplex3d& simplex, const wuzy_vec3& direction)
+NextSimplexResult next_simplex(const wuzy_simplex3d& simplex, vec3_view direction)
 {
     switch (simplex.num_vertices) {
     case 2:
@@ -822,14 +994,43 @@ NextSimplexResult next_simplex(const wuzy_simplex3d& simplex, const wuzy_vec3& d
     }
 }
 
-void push_front(wuzy_simplex3d& simplex, const wuzy_vec3& v)
+void push_front(wuzy_simplex3d& simplex, vec3_view v)
 {
-    simplex.vertices[3] = simplex.vertices[2];
-    simplex.vertices[2] = simplex.vertices[1];
-    simplex.vertices[1] = simplex.vertices[0];
-    simplex.vertices[0] = v;
+    copy(simplex.vertices[3], v3(simplex.vertices[2]));
+    copy(simplex.vertices[2], v3(simplex.vertices[1]));
+    copy(simplex.vertices[1], v3(simplex.vertices[0]));
+    copy(simplex.vertices[0], v);
     assert(simplex.num_vertices < 4);
     simplex.num_vertices++;
+}
+
+void add_debug_iteration(wuzy_gjk_debug* debug, const wuzy_collider* c1, const wuzy_collider* c2,
+    const vec3& direction, const vec3& support)
+{
+    if (!debug) {
+        return;
+    }
+
+    // Yes, we are allocating a storm in here
+    if (!debug->iterations) {
+        debug->iterations = allocate<wuzy_gjk_debug_iteration>(debug->alloc, 1);
+        debug->num_iterations = 1;
+    } else {
+        debug->iterations = reallocate<wuzy_gjk_debug_iteration>(
+            debug->alloc, debug->iterations, debug->num_iterations, debug->num_iterations + 1);
+        debug->num_iterations++;
+    }
+
+    const auto a_sup = collider_support(c1, direction);
+    const auto b_sup = collider_support(c2, mul(direction, -1.0f));
+    debug->iterations[debug->num_iterations - 1] = {
+        .direction = { direction.x, direction.y, direction.z },
+        .a_support = { a_sup.x, a_sup.y, a_sup.z },
+        .b_support = { b_sup.x, b_sup.y, b_sup.z },
+        .support = { support.x, support.y, support.z },
+        .simplex = {},
+        .contains_origin = false,
+    };
 }
 }
 
@@ -841,36 +1042,23 @@ EXPORT bool wuzy_gjk(
     // centers of the shapes.
     // Casey says it doesn't really matter what we start with, because it converges really
     // quickly.
-    auto direction = wuzy_vec3 { 1.0f, 0.0f, 0.0f };
+    vec3 direction = { 1.0f, 0.0f, 0.0f };
 
     const auto a0 = support(c1, c2, direction);
 
     // TODO: Handle a0 == origin
 
     auto& simplex = *result;
-    simplex.vertices[0] = a0;
+    copy(simplex.vertices[0], a0);
     simplex.num_vertices = 1;
 
+    add_debug_iteration(debug, c1, c2, direction, a0);
     if (debug) {
-        debug->iterations = allocate<wuzy_gjk_debug_iteration>(debug->alloc, 1);
-        debug->num_iterations = 1;
-        debug->iterations[debug->num_iterations - 1] = {
-            .direction = direction,
-            .a_support = wuzy_collider_support(c1, direction),
-            .b_support = wuzy_collider_support(c2, mul(direction, -1.0f)),
-            .support = a0,
-            .simplex = simplex,
-            .contains_origin = false,
-        };
+        debug->iterations[debug->num_iterations - 1].simplex = simplex;
     }
 
     // Choose dir towards the origin: a0 -> O = O - a0 = -a0.
     direction = mul(a0, -1.0f);
-
-    if (debug) {
-        debug->iterations = nullptr;
-        debug->num_iterations = 0;
-    }
 
     size_t num_iterations = 0;
     const auto debug_max_iterations
@@ -882,20 +1070,7 @@ EXPORT bool wuzy_gjk(
         const auto a = support(c1, c2, direction);
         assert(is_finite(a));
 
-        if (debug) {
-            // Yes, we are allocating a storm in here
-            debug->iterations = reallocate<wuzy_gjk_debug_iteration>(
-                debug->alloc, debug->iterations, debug->num_iterations, debug->num_iterations + 1);
-            debug->num_iterations++;
-            debug->iterations[debug->num_iterations - 1] = {
-                .direction = direction,
-                .a_support = wuzy_collider_support(c1, direction),
-                .b_support = wuzy_collider_support(c2, mul(direction, -1.0f)),
-                .support = a,
-                .simplex = {},
-                .contains_origin = false,
-            };
-        }
+        add_debug_iteration(debug, c1, c1, direction, a);
 
         if (dot(a, direction) < 0.0f) {
             // No Intersection:
@@ -909,7 +1084,7 @@ EXPORT bool wuzy_gjk(
 
         auto res = next_simplex(simplex, direction);
         for (size_t i = 0; i < res.simplex.num_vertices; ++i) {
-            assert(is_finite(res.simplex.vertices[i]));
+            assert(is_finite(v3(res.simplex.vertices[i])));
         }
 
         if (debug) {
@@ -937,8 +1112,8 @@ EXPORT void wuzy_gjk_debug_free(wuzy_gjk_debug* debug)
 EXPORT bool wuzy_test_collision(
     const wuzy_collider* a, const wuzy_collider* b, wuzy_gjk_debug* debug)
 {
-    const auto a_aabb = wuzy_collider_get_aabb(a);
-    const auto b_aabb = wuzy_collider_get_aabb(b);
+    const auto a_aabb = collider_get_aabb(a);
+    const auto b_aabb = collider_get_aabb(b);
     if (!overlap(a_aabb, b_aabb)) {
         return false;
     }
@@ -951,11 +1126,11 @@ struct EpaTriangle {
     size_t v0;
     size_t v1;
     size_t v2;
-    wuzy_vec3 normal = { 0.0f, 0.0f, 0.0f };
+    vec3 normal = { 0.0f, 0.0f, 0.0f };
     float dist = 0.0f; // Distance to origin
 };
 
-void update_normal(std::span<const wuzy_vec3> vertices, EpaTriangle& face, bool flip = true)
+void update_normal(std::span<const vec3> vertices, EpaTriangle& face, bool flip = true)
 {
     assert(face.v0 < vertices.size() && face.v1 < vertices.size() && face.v2 < vertices.size());
     const auto& v0 = vertices[face.v0];
@@ -1037,11 +1212,11 @@ EXPORT wuzy_collision_result wuzy_epa(const wuzy_collider* c1, const wuzy_collid
     static constexpr auto max_num_iterations = 32;
 
     // 4 vertices from initial simplex + one in every iteration
-    std::array<wuzy_vec3, 4 + max_num_iterations> polytope_vertices_data;
-    VecAdapter<wuzy_vec3> polytope_vertices(polytope_vertices_data);
+    std::array<vec3, 4 + max_num_iterations> polytope_vertices_data;
+    VecAdapter<vec3> polytope_vertices(polytope_vertices_data);
     for (size_t i = 0; i < 4; ++i) {
-        assert(is_finite(simplex->vertices[i]));
-        polytope_vertices.push_back(simplex->vertices[i]);
+        assert(is_finite(v3(simplex->vertices[i])));
+        polytope_vertices.push_back(make_vec3(simplex->vertices[i]));
     }
 
     // 4 faces from initial simplex + 2 faces per iteration
@@ -1104,9 +1279,9 @@ EXPORT wuzy_collision_result wuzy_epa(const wuzy_collider* c1, const wuzy_collid
             auto& it = debug->iterations[debug->num_iterations - 1];
 
             it.num_polytope_vertices = polytope_vertices.size();
-            it.polytope_vertices = allocate<wuzy_vec3>(debug->alloc, it.num_polytope_vertices);
+            it.polytope_vertices = allocate<float>(debug->alloc, it.num_polytope_vertices * 3);
             std::memcpy(it.polytope_vertices, polytope_vertices.data(),
-                polytope_vertices.size() * sizeof(wuzy_vec3));
+                polytope_vertices.size() * sizeof(vec3));
 
             it.num_polytope_faces = polytope_faces.size();
             it.polytope_faces = allocate<wuzy_epa_debug_face>(debug->alloc, it.num_polytope_faces);
@@ -1118,7 +1293,7 @@ EXPORT wuzy_collision_result wuzy_epa(const wuzy_collider* c1, const wuzy_collid
 
             it.min_dist_face_index = min_dist_face_idx;
             it.min_face_dist = min_face_dist;
-            it.support_point = sup_point;
+            copy(it.support_point, sup_point);
             it.support_dist = sup_dist;
             it.edges_to_patch = nullptr;
             it.num_edges_to_patch = 0;
@@ -1177,18 +1352,18 @@ EXPORT wuzy_collision_result wuzy_epa(const wuzy_collider* c1, const wuzy_collid
 
     // TODO: Project the origin into the closest face to approximate contact points
 
-    return {
-        polytope_faces[min_dist_face_idx].normal,
-        // Add some epsilon to make sure we resolve the collision
-        min_face_dist + 1e-4f,
-    };
+    wuzy_collision_result res;
+    copy(res.normal, polytope_faces[min_dist_face_idx].normal);
+    // Add some epsilon to make sure we resolve the collision
+    res.depth = min_face_dist + 1e-4f;
+    return res;
 }
 
 EXPORT void wuzy_epa_debug_free(wuzy_epa_debug* debug)
 {
     for (size_t i = 0; i < debug->num_iterations; ++i) {
         const auto& it = debug->iterations[i];
-        deallocate(debug->alloc, it.polytope_vertices, it.num_polytope_vertices);
+        deallocate(debug->alloc, it.polytope_vertices, it.num_polytope_vertices * 3);
         deallocate(debug->alloc, it.polytope_faces, it.num_polytope_faces);
         deallocate(debug->alloc, it.face_removed, it.num_polytope_faces);
         deallocate(debug->alloc, it.edges_to_patch, it.num_edges_to_patch);
@@ -1200,8 +1375,8 @@ EXPORT void wuzy_epa_debug_free(wuzy_epa_debug* debug)
 EXPORT bool wuzy_get_collision(const wuzy_collider* a, const wuzy_collider* b,
     wuzy_collision_result* result, wuzy_gjk_debug* gjk_debug, wuzy_epa_debug* epa_debug)
 {
-    const auto a_aabb = wuzy_collider_get_aabb(a);
-    const auto b_aabb = wuzy_collider_get_aabb(b);
+    const auto a_aabb = collider_get_aabb(a);
+    const auto b_aabb = collider_get_aabb(b);
     if (!overlap(a_aabb, b_aabb)) {
         return false;
     }
@@ -1238,7 +1413,7 @@ struct Node {
     GenerationType generation = 1;
 
     wuzy_collider* collider = nullptr;
-    wuzy_aabb aabb;
+    Aabb aabb;
     uint64_t bitmask = 0;
 
     Node* parent = nullptr;
@@ -1470,7 +1645,7 @@ Node* insert_node(AabbTree* tree, Node* parent, wuzy_aabb_tree_init_node* init_n
     if (node->collider) { // leaf node
         assert(!init_node->left && !init_node->right);
         node->bitmask = init_node->bitmask ? init_node->bitmask : static_cast<uint64_t>(-1);
-        node->aabb = wuzy_collider_get_aabb(init_node->collider);
+        node->aabb = collider_get_aabb(init_node->collider);
         node->parent = parent;
         tree->num_colliders++;
     } else {
@@ -1497,12 +1672,12 @@ EXPORT void wuzy_aabb_tree_build(wuzy_aabb_tree* wtree, wuzy_collider* const* co
     // Just add a bunch of collider nodes, just enough so that rebuild will work
     auto tree = reinterpret_cast<AabbTree*>(wtree);
     assert(tree->num_nodes == 0);
-    assert(tree->max_num_colliders <= num_colliders);
+    assert(num_colliders <= tree->max_num_colliders);
     for (size_t i = 0; i < num_colliders; ++i) {
         auto node = tree->get_new_node();
         assert(node);
         node->collider = colliders[i];
-        node->aabb = wuzy_collider_get_aabb(node->collider);
+        node->aabb = collider_get_aabb(node->collider);
         node->bitmask = (bitmasks && bitmasks[i]) ? bitmasks[i] : static_cast<uint64_t>(-1);
         nodes[i].id = tree->get_id(node);
         tree->num_colliders++;
@@ -1606,7 +1781,7 @@ EXPORT wuzy_aabb_tree_node wuzy_aabb_tree_insert(
         return { 0 };
     }
     node->collider = collider;
-    node->aabb = wuzy_collider_get_aabb(collider);
+    node->aabb = collider_get_aabb(collider);
     node->bitmask = bitmask ? bitmask : static_cast<uint64_t>(-1);
     if (!tree->insert(node, tree->root)) {
         tree->free_node(node);
@@ -1631,7 +1806,7 @@ EXPORT bool wuzy_aabb_tree_update(wuzy_aabb_tree* wtree, wuzy_aabb_tree_node wno
     if (!node) {
         return false;
     }
-    node->aabb = wuzy_collider_get_aabb(node->collider);
+    node->aabb = collider_get_aabb(node->collider);
     node->bitmask = bitmask ? bitmask : node->bitmask;
     switch (mode) {
     case WUZY_AABB_TREE_UPDATE_FLAGS_DEFAULT:
@@ -1670,7 +1845,8 @@ wuzy_aabb_tree_dump_node* add_node(const AabbTree* tree, Node* node,
     const auto idx = (*num_nodes)++;
     nodes[idx].id = wuzy_aabb_tree_node { tree->get_id(node) };
     nodes[idx].collider = node->collider;
-    nodes[idx].aabb = node->aabb;
+    copy(nodes[idx].aabb_min, node->aabb.min);
+    copy(nodes[idx].aabb_max, node->aabb.max);
     nodes[idx].parent = parent;
     nodes[idx].left = add_node(tree, node->left, nodes + idx, nodes, num_nodes, max_num_nodes);
     nodes[idx].right = add_node(tree, node->right, nodes + idx, nodes, num_nodes, max_num_nodes);
@@ -1710,8 +1886,8 @@ struct NodeQuery {
     uint64_t bitmask;
     Type type;
     union {
-        wuzy_vec3 point;
-        wuzy_aabb aabb;
+        vec3 point;
+        Aabb aabb;
     } params;
     wuzy_query_debug* debug;
 };
@@ -1746,13 +1922,13 @@ EXPORT void wuzy_aabb_tree_node_query_destroy(wuzy_aabb_tree_node_query* wquery)
     deallocate(query->alloc, query);
 }
 
-EXPORT void wuzy_aabb_tree_node_query_point_begin(
-    wuzy_aabb_tree_node_query* wquery, wuzy_vec3 point, uint64_t bitmask, wuzy_query_debug* debug)
+EXPORT void wuzy_aabb_tree_node_query_point_begin(wuzy_aabb_tree_node_query* wquery,
+    const float point[3], uint64_t bitmask, wuzy_query_debug* debug)
 {
     auto query = reinterpret_cast<NodeQuery*>(wquery);
     query->bitmask = bitmask ? bitmask : static_cast<uint64_t>(-1);
     query->type = NodeQuery::Type::Point;
-    query->params.point = point;
+    query->params.point = { point[x], point[y], point[z] };
     query->debug = debug;
     query->node_stack_size = 0;
     if (query->tree->root) {
@@ -1761,12 +1937,13 @@ EXPORT void wuzy_aabb_tree_node_query_point_begin(
 }
 
 EXPORT void wuzy_aabb_tree_node_query_aabb_begin(wuzy_aabb_tree_node_query* wquery,
-    const wuzy_aabb* aabb, uint64_t bitmask, wuzy_query_debug* debug)
+    const float aabb_min[3], const float aabb_max[3], uint64_t bitmask, wuzy_query_debug* debug)
 {
     auto query = reinterpret_cast<NodeQuery*>(wquery);
     query->bitmask = bitmask ? bitmask : static_cast<uint64_t>(-1);
     query->type = NodeQuery::Type::Aabb;
-    query->params.aabb = *aabb;
+    query->params.aabb.min = { aabb_min[x], aabb_min[y], aabb_min[z] };
+    query->params.aabb.max = { aabb_max[x], aabb_max[y], aabb_max[z] };
     query->debug = debug;
     query->node_stack_size = 0;
     if (query->tree->root) {
@@ -1862,8 +2039,8 @@ EXPORT size_t wuzy_aabb_tree_node_query_next(
     }
 }
 
-EXPORT bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* wquery, wuzy_vec3 start,
-    wuzy_vec3 direction, uint64_t bitmask, wuzy_aabb_tree_node* hit_node,
+EXPORT bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* wquery,
+    const float start[3], const float dir[3], uint64_t bitmask, wuzy_aabb_tree_node* hit_node,
     wuzy_ray_cast_result* result, wuzy_query_debug* debug)
 {
     bitmask = bitmask ? bitmask : static_cast<uint64_t>(-1);
@@ -1889,7 +2066,7 @@ EXPORT bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* wquery
             debug->bitmask_checks_passed++;
         }
 
-        const auto aabb_hit = ray_cast(node->aabb, start, direction, &temp_res);
+        const auto aabb_hit = ray_cast(node->aabb, v3(start), v3(dir), &temp_res);
         if (aabb_hit && (!hit || temp_res.t < result->t)) {
             if (debug) {
                 debug->aabb_checks_passed++;
@@ -1899,7 +2076,7 @@ EXPORT bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* wquery
                     debug->leaves_checked++;
                 }
                 const auto collider_hit
-                    = wuzy_collider_ray_cast(node->collider, start, direction, &temp_res);
+                    = wuzy_collider_ray_cast(node->collider, start, dir, &temp_res);
                 if (collider_hit && (!hit || temp_res.t < result->t)) {
                     if (debug) {
                         debug->full_checks_passed++;
