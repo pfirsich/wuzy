@@ -25,7 +25,7 @@ struct CollisionResult {
 struct Collider {
     wuzy_collider collider;
 
-    virtual ~Collider() = default;
+    ~Collider() = default;
     Collider() = default;
     Collider(const Collider&) = delete;
     Collider& operator=(const Collider&) = delete;

@@ -366,6 +366,7 @@ int main()
     for (size_t i = 0; i < level_colliders.size(); ++i) {
         collider_ptrs[i] = &level_colliders[i].collider;
     }
+    // Colliders are inserted by pointer, so their pointer have to be stable after insertion!
     /*for (auto& collider : level_colliders) {
         broadphase.insert(collider);
     }*/
