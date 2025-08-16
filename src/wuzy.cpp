@@ -1622,6 +1622,7 @@ EXPORT wuzy_aabb_tree* wuzy_aabb_tree_create(size_t max_num_colliders, wuzy_allo
     if (!tree->free_list) {
         deallocate(tree->alloc, tree->nodes, tree->max_num_nodes);
         deallocate(tree->alloc, tree);
+        return nullptr;
     }
     return reinterpret_cast<wuzy_aabb_tree*>(tree);
 }
