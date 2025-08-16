@@ -1868,7 +1868,7 @@ EXPORT size_t wuzy_aabb_tree_dump(
     return num_nodes;
 }
 
-void wuzy_aabb_tree_get_stats(const wuzy_aabb_tree* wtree, wuzy_aabb_tree_stats* stats)
+EXPORT void wuzy_aabb_tree_get_stats(const wuzy_aabb_tree* wtree, wuzy_aabb_tree_stats* stats)
 {
     auto tree = reinterpret_cast<const AabbTree*>(wtree);
     stats->num_colliders = tree->num_colliders;
