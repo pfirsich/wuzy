@@ -537,8 +537,8 @@ EXPORT void wuzy_triangle_collider_support(const void* userdata, const float dir
 {
     const auto& tri = *static_cast<const wuzy_triangle_collider_userdata*>(userdata);
     float max_dot = -FLT_MAX;
-    for (int i = 0; i < 3; i++) {
-        float d = dot(v3(tri.vertices[i]), v3(dir));
+    for (size_t i = 0; i < 3; ++i) {
+        const auto d = dot(v3(tri.vertices[i]), v3(dir));
         if (d > max_dot) {
             max_dot = d;
             copy(sup, v3(tri.vertices[i]));
