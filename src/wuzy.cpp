@@ -1071,7 +1071,7 @@ EXPORT bool wuzy_gjk(
         const auto a = support(c1, c2, direction);
         assert(is_finite(a));
 
-        add_debug_iteration(debug, c1, c1, direction, a);
+        add_debug_iteration(debug, c1, c2, direction, a);
 
         if (dot(a, direction) < 0.0f) {
             // No Intersection:
