@@ -464,7 +464,8 @@ EXPORT bool wuzy_collider_ray_cast(const wuzy_collider* collider, const float st
     // Transform results back to world space
     const auto trafo = m4(collider->transform);
     copy(result->hit_position, mul(trafo, v3(local_result.hit_position), 1.0f));
-    copy(result->normal, normalize(mul(trafo, v3(local_result.normal), 0.0f)));
+    const auto inv_transpose = transpose(m4(collider->inverse_transform));
+    copy(result->normal, normalize(mul(inv_transpose, v3(local_result.normal), 0.0f)));
     result->t = local_result.t;
     return true;
 }
