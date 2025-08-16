@@ -68,7 +68,7 @@ int main()
          1.0f,  1.0f, -1.0f,
         // clang-format on
     };
-    const std::vector<size_t> triangle_indices { 0, 1, 2 };
+    const std::vector<uint32_t> triangle_indices { 0, 1, 2 };
 
     wuzy::ConvexPolyhedronCollider collider_a(triangle_positions, triangle_indices);
 

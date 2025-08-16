@@ -76,8 +76,8 @@ void wuzy_collider_get_aabb(const wuzy_collider* collider, float min[3], float m
 // Helper function for triangle and convex polyhedron colliders.
 // There should be three floats for every vertex and three indices for every face.
 // There should be just as many normals as there are faces and three floats per normal.
-bool wuzy_calculate_normals(const float* vertices, size_t num_vertices, const size_t* face_indices,
-    size_t num_faces, float* normals);
+bool wuzy_calculate_normals(const float* vertices, size_t num_vertices,
+    const uint32_t* face_indices, size_t num_faces, float* normals);
 
 typedef struct {
     float vertices[3][3];
@@ -107,7 +107,7 @@ bool wuzy_sphere_collider_ray_cast(
 typedef struct {
     float* vertices;
     size_t num_vertices;
-    size_t* face_indices;
+    uint32_t* face_indices;
     size_t num_faces;
     float* normals; // one normal per face
 } wuzy_convex_polyhedron_collider_userdata;

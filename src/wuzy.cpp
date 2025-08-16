@@ -499,12 +499,12 @@ static void calculate_normal(
 }
 
 EXPORT bool wuzy_calculate_normals(const float* vertices, size_t num_vertices,
-    const size_t* face_indices, size_t num_faces, float* normals)
+    const uint32_t* face_indices, size_t num_faces, float* normals)
 {
     for (size_t i = 0; i < num_faces; i++) {
-        size_t i0 = face_indices[i * 3];
-        size_t i1 = face_indices[i * 3 + 1];
-        size_t i2 = face_indices[i * 3 + 2];
+        const auto i0 = face_indices[i * 3];
+        const auto i1 = face_indices[i * 3 + 1];
+        const auto i2 = face_indices[i * 3 + 2];
 
         if (i0 >= num_vertices || i1 >= num_vertices || i2 >= num_vertices) {
             return false;

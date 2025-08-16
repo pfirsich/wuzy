@@ -111,10 +111,10 @@ struct SphereCollider : public Collider {
 struct ConvexPolyhedronCollider : public Collider {
     wuzy_convex_polyhedron_collider_userdata userdata;
     std::vector<float> vertices;
-    std::vector<size_t> indices;
+    std::vector<uint32_t> indices;
     std::vector<float> normals;
 
-    ConvexPolyhedronCollider(std::span<const float> v, std::span<const size_t> i)
+    ConvexPolyhedronCollider(std::span<const float> v, std::span<const uint32_t> i)
         : vertices(v.begin(), v.end())
         , indices(i.begin(), i.end())
     {

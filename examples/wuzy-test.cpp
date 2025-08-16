@@ -75,7 +75,7 @@ void draw_mesh(const glwx::Mesh& mesh, const glm::vec4& color, const glw::Textur
 
 glwx::Mesh make_triangle_mesh(const glw::VertexFormat& vfmt, const glwx::AttributeLocations& loc,
     std::span<const glm::vec3> positions, std::span<const glm::vec2> tex_coords,
-    std::span<const glm::vec3> normals, std::span<const size_t> indices)
+    std::span<const glm::vec3> normals, std::span<const uint32_t> indices)
 {
     glwx::Mesh mesh;
 
@@ -197,7 +197,7 @@ int main()
     };
 
     // clang-format off
-    std::vector<size_t> box_faces = {
+    std::vector<uint32_t> box_faces = {
          3, 0, 4,    3, 4, 7, // -x
          6, 5, 1,    6, 1, 2, // +x
          4, 0, 1,    4, 1, 5, // -y
@@ -223,7 +223,7 @@ int main()
         glm::vec2(0.0f, 1.0f),
     };
 
-    const std::vector<size_t> tri_indices { 0, 1, 2 };
+    const std::vector<uint32_t> tri_indices { 0, 1, 2 };
 
     const auto triangle_mesh
         = make_triangle_mesh(vert_fmt, { .position = 0, .texCoords = 1, .normal = 2 }, tri_verts,
