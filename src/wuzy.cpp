@@ -1397,7 +1397,7 @@ using IndexType = uint32_t;
 
 IndexType id_get_idx(IdType id)
 {
-    return static_cast<IndexType>(id & 0xFFFFFFFF);
+    return static_cast<IndexType>(id & 0xFFFF'FFFF);
 }
 
 GenerationType id_get_gen(IdType id)
