@@ -422,7 +422,7 @@ EXPORT void wuzy_invert_trs(const float mat[16], float inv[16])
     inv_s.cols[2].z = 1.0f / sz;
 
     auto inv_t = identity();
-    inv_t.cols[3] = mul(m[3], -1.0f);
+    inv_t.cols[3] = { -m[3][0], -m[3][1], -m[3][2], 1.0f };
 
     copy(inv, mul(mul(inv_s, inv_r), inv_t));
 }
