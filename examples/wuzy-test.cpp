@@ -208,8 +208,8 @@ int main()
     // clang-format on
 
     const std::vector<glm::vec3> tri_verts {
-        glm::vec3(-1.0f, -1.0f, -1.0f),
-        glm::vec3(-1.0f, 1.0f, 1.0f),
+        glm::vec3(1.0f, -1.0f, -1.0f),
+        glm::vec3(1.0f, 1.0f, 1.0f),
         glm::vec3(1.0f, 1.0f, -1.0f),
     };
 

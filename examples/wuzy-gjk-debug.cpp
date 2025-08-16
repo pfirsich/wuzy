@@ -87,9 +87,9 @@ int main()
         const float stack_angle = glm::pi<float>() / (num_md_stacks - 1) * stack;
         for (size_t slice = 0; slice < num_md_slices; ++slice) {
             const auto slice_angle = 2.0f * glm::pi<float>() / num_md_slices * slice;
-            const glm::vec3 dir = { 
+            const glm::vec3 dir = {
                 glm::cos(slice_angle) * glm::sin(stack_angle),
-                glm::cos(stack_angle), 
+                glm::cos(stack_angle),
                 glm::sin(slice_angle) * glm::sin(stack_angle),
             };
             const glm::vec3 ndir = { -dir.x, -dir.y, -dir.z };
@@ -238,9 +238,12 @@ int main()
             // clang-format on
         }
 
-        debug_draw.diamond(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), make_vec3(it.a_support), 0.005f); // red
-        debug_draw.diamond(glm::vec4(0.0f, 1.0f, 1.0f, 1.0f), make_vec3(it.b_support), 0.005f); // turq
-        debug_draw.diamond(glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), make_vec3(it.support), 0.005f); // blue
+        debug_draw.diamond(
+            glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), make_vec3(it.a_support), 0.005f); // red
+        debug_draw.diamond(
+            glm::vec4(0.0f, 1.0f, 1.0f, 1.0f), make_vec3(it.b_support), 0.005f); // turq
+        debug_draw.diamond(
+            glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), make_vec3(it.support), 0.005f); // blue
 
         window.swap();
     }
