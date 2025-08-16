@@ -493,10 +493,9 @@ EXPORT void wuzy_collider_get_aabb(const wuzy_collider* collider, float min[3], 
     copy(max, aabb.max);
 }
 
-static void calculate_normal(
-    float normal[3], const float v0[3], const float v1[3], const float v2[3])
+static vec3 calculate_normal(const float v0[3], const float v1[3], const float v2[3])
 {
-    copy(normal, normalize(cross(sub(v3(v1), v3(v0)), sub(v3(v2), v3(v0)))));
+    return cross(sub(v3(v1), v3(v0)), sub(v3(v2), v3(v0)));
 }
 
 EXPORT bool wuzy_calculate_normals(const float* vertices, size_t num_vertices,
@@ -511,7 +510,8 @@ EXPORT bool wuzy_calculate_normals(const float* vertices, size_t num_vertices,
             return false;
         }
 
-        calculate_normal(normals + i * 3, vertices + i0 * 3, vertices + i1 * 3, vertices + i2 * 3);
+        copy(normals + i * 3,
+            normalize(calculate_normal(vertices + i0 * 3, vertices + i1 * 3, vertices + i2 * 3)));
     }
 
     return true;
@@ -529,8 +529,8 @@ EXPORT void wuzy_triangle_collider_init(
     collider->userdata = userdata;
     collider->support_func = wuzy_triangle_collider_support;
     collider->ray_cast_func = wuzy_triangle_collider_ray_cast;
-    calculate_normal(
-        userdata->normal, userdata->vertices[0], userdata->vertices[1], userdata->vertices[2]);
+    copy(userdata->normal,
+        calculate_normal(userdata->vertices[0], userdata->vertices[1], userdata->vertices[2]));
 }
 
 EXPORT void wuzy_triangle_collider_support(const void* userdata, const float dir[3], float sup[3])
