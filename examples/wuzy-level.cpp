@@ -1,5 +1,4 @@
 #include <chrono>
-#include <set>
 #include <span>
 
 #include <glm/gtx/norm.hpp>
