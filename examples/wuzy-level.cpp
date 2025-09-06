@@ -164,7 +164,7 @@ bool move_player(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query
     const auto ray_start = trafo.getPosition();
     const glm::vec3 ray_dir = { 0.0f, -1.0f, 0.0f };
     const auto rc = bp_query.ray_cast(ray_start, ray_dir);
-    const auto on_ground = rc && rc->second.t < 0.71f; // kind of controls walkable slope height
+    const auto on_ground = rc && rc->hit.t < 0.71f; // kind of controls walkable slope height
     if (on_ground) {
         if (velocity.y < 0.0f) {
             velocity.y = 0.0f;
@@ -214,13 +214,10 @@ bool move_player(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query
     const auto [aabb_min, aabb_max] = collider.get_aabb<glm::vec3>();
     bp_query.begin(aabb_min, aabb_max, 0, &debug);
     const auto candidates = bp_query.all();
-    fmt::println("collision: nodes={}, bitmasks={}, aabbs={}, leaves={}, full={}",
-        debug.nodes_checked, debug.bitmask_checks_passed, debug.aabb_checks_passed,
-        debug.leaves_checked, debug.full_checks_passed);
 
     bool collision = false;
-    for (auto node : candidates) {
-        const auto other_collider = broadphase.get_collider(node);
+    for (auto res : candidates) {
+        const auto other_collider = broadphase.get_collider(res.node);
         if (other_collider == &collider) {
             continue;
         }
@@ -265,7 +262,7 @@ void collect_aabbs(std::vector<std::pair<Aabb, uint32_t>>& aabbs,
     const wuzy_aabb_tree_dump_node* node, uint32_t depth = 0)
 {
     aabbs.push_back({ get_aabb(node), depth });
-    if (!node->collider) {
+    if (!node->userdata) { // leaf
         collect_aabbs(aabbs, node->left, depth + 1);
         collect_aabbs(aabbs, node->right, depth + 1);
     }
@@ -290,7 +287,7 @@ void print_node(const wuzy_aabb_tree_dump_node& node, size_t indent = 0)
         };
         return ext.x * ext.y * ext.z;
     };
-    fmt::println("{}{} ({}) (vol: {})", indent_str, node.id.id, fmt::ptr(node.collider), vol(node));
+    fmt::println("{}{} ({}) (vol: {})", indent_str, node.id.id, fmt::ptr(node.userdata), vol(node));
     if (node.left) {
         print_node(*node.left, indent + 1);
     }
@@ -378,7 +375,7 @@ int main()
         "rebuild time: {}us", std::chrono::duration_cast<std::chrono::microseconds>(delta).count());
 
     const auto stats = broadphase.get_stats();
-    fmt::println("colliders={}, nodes={}, max_nodes={}", stats.num_colliders, stats.num_nodes,
+    fmt::println("colliders={}, nodes={}, max_nodes={}", stats.num_leaves, stats.num_nodes,
         stats.max_num_nodes);
 
     glwx::Transform player_trafo;
@@ -485,15 +482,12 @@ int main()
         wuzy_query_debug debug = {};
         const auto rc = bp_query.ray_cast(ray_start, ray_dir, 0, &debug);
         if (rc) {
-            const auto [node, res] = *rc;
-            debug_draw.diamond(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), res.hit_position, 0.05f);
-            debug_draw.arrow(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), res.hit_position,
-                res.hit_position + res.normal * 0.2f);
+            const auto [node, collider, hit] = *rc;
+            const auto hit_pos = glm::make_vec3(hit.hit_position);
+            debug_draw.diamond(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), hit_pos, 0.05f);
+            debug_draw.arrow(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), hit_pos,
+                hit_pos + glm::make_vec3(hit.normal) * 0.2f);
         }
-
-        fmt::println("raycast: nodes={}, bitmasks={}, aabbs={}, leaves={}, full={}",
-            debug.nodes_checked, debug.bitmask_checks_passed, debug.aabb_checks_passed,
-            debug.leaves_checked, debug.full_checks_passed);
 
         window.swap();
     }

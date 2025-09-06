@@ -185,7 +185,7 @@ struct AabbTree {
 
     static size_t count_leaves(wuzy_aabb_tree_init_node* node)
     {
-        if (node->collider) {
+        if (node->userdata) {
             return 1;
         }
         return count_leaves(node->left) + count_leaves(node->right);
@@ -220,9 +220,18 @@ struct AabbTree {
         std::span<wuzy_collider*> colliders, std::span<uint64_t> bitmasks = {})
     {
         assert(bitmasks.empty() || colliders.size() == bitmasks.size());
+
+        std::vector<wuzy_aabb_tree_init_node> init_nodes(colliders.size());
+        for (size_t i = 0; i < colliders.size(); ++i) {
+            init_nodes[i] = { { 0 }, colliders[i], bitmasks.size() ? bitmasks[i] : 0 };
+            wuzy_collider_get_aabb(colliders[i], init_nodes[i].aabb_min, init_nodes[i].aabb_max);
+        }
+        wuzy_aabb_tree_build(aabb_tree, init_nodes.data(), init_nodes.size());
+
         std::vector<wuzy_aabb_tree_node> nodes(colliders.size(), wuzy_aabb_tree_node { 0 });
-        wuzy_aabb_tree_build(aabb_tree, colliders.data(),
-            bitmasks.size() ? bitmasks.data() : nullptr, colliders.size(), nodes.data());
+        for (size_t i = 0; i < colliders.size(); ++i) {
+            nodes[i] = init_nodes[i].id;
+        }
         return nodes;
     }
 
@@ -230,14 +239,19 @@ struct AabbTree {
 
     wuzy_aabb_tree_node insert(Collider& collider, uint64_t bitmask = 0)
     {
-        return wuzy_aabb_tree_insert(aabb_tree, &collider.collider, bitmask);
+        float min[3], max[3];
+        wuzy_collider_get_aabb(&collider.collider, min, max);
+        return wuzy_aabb_tree_insert(aabb_tree, &collider.collider, bitmask, min, max);
     }
 
     bool update(
         wuzy_aabb_tree_node node, uint64_t bitmask = 0, UpdateMode mode = UpdateMode::Default)
     {
+        const auto collider = (wuzy_collider*)wuzy_aabb_tree_get_userdata(aabb_tree, node);
+        float min[3], max[3];
+        wuzy_collider_get_aabb(collider, min, max);
         return wuzy_aabb_tree_update(
-            aabb_tree, node, bitmask, static_cast<wuzy_aabb_tree_update_mode>(mode));
+            aabb_tree, node, bitmask, min, max, static_cast<wuzy_aabb_tree_update_mode>(mode));
     }
 
     Collider* get_collider(wuzy_aabb_tree_node node)
@@ -245,7 +259,7 @@ struct AabbTree {
         // Of course this only works if the wuzy_collider returned is actually part of a Collider!
         // This is likely UB, but adding a map that maps wuzy_collider* to Collider*, but the
         // pointers are always the same value is a bit silly.
-        auto collider = reinterpret_cast<Collider*>(wuzy_aabb_tree_get_collider(aabb_tree, node));
+        auto collider = reinterpret_cast<Collider*>(wuzy_aabb_tree_get_userdata(aabb_tree, node));
         return collider;
     }
 
@@ -274,9 +288,9 @@ struct AabbTree {
             wuzy_aabb_tree_node_query_aabb_begin(query, &min[0], &max[0], bitmask, debug);
         }
 
-        std::optional<wuzy_aabb_tree_node> next()
+        std::optional<wuzy_aabb_tree_node_query_result> next()
         {
-            wuzy_aabb_tree_node node;
+            wuzy_aabb_tree_node_query_result node;
             if (wuzy_aabb_tree_node_query_next(query, &node, 1)) {
                 return node;
             } else {
@@ -284,10 +298,10 @@ struct AabbTree {
             }
         }
 
-        std::vector<wuzy_aabb_tree_node> all()
+        std::vector<wuzy_aabb_tree_node_query_result> all()
         {
-            std::vector<wuzy_aabb_tree_node> res;
-            wuzy_aabb_tree_node node;
+            std::vector<wuzy_aabb_tree_node_query_result> res;
+            wuzy_aabb_tree_node_query_result node;
             while (wuzy_aabb_tree_node_query_next(query, &node, 1)) {
                 res.push_back(node);
             }
@@ -295,25 +309,28 @@ struct AabbTree {
         }
 
         template <typename Vec3>
-        auto ray_cast(const Vec3& start, const Vec3& dir, uint64_t bitmask = 0,
-            wuzy_query_debug* debug = nullptr)
-            -> std::optional<std::pair<wuzy_aabb_tree_node, RayCastResult<Vec3>>>
+        std::optional<wuzy_ray_cast_colliders_result> ray_cast(const Vec3& start, const Vec3& dir,
+            uint64_t bitmask = 0, wuzy_query_debug* debug = nullptr)
         {
-            wuzy_aabb_tree_node node;
-            wuzy_ray_cast_result res;
-            if (wuzy_aabb_tree_node_query_ray_cast(
-                    query, &start[0], &dir[0], bitmask, &node, &res, debug)) {
-                return std::pair {
-                    node,
-                    RayCastResult<Vec3> {
-                        Vec3 { res.normal[0], res.normal[1], res.normal[2] },
-                        Vec3 { res.hit_position[0], res.hit_position[1], res.hit_position[2] },
-                        res.t,
-                    },
-                };
+            wuzy_ray_cast_colliders_result res;
+            const auto hit = wuzy_aabb_tree_ray_cast_colliders(
+                query, &start[0], &dir[0], bitmask, &res, 1, debug);
+            if (hit) {
+                return res;
             } else {
                 return std::nullopt;
             }
+        }
+
+        template <typename Vec3>
+        std::vector<wuzy_ray_cast_colliders_result> ray_cast(const Vec3& start, const Vec3& dir,
+            size_t max_num_results, uint64_t bitmask = 0, wuzy_query_debug* debug = nullptr)
+        {
+            std::vector<wuzy_ray_cast_colliders_result> results(max_num_results);
+            const auto n = wuzy_aabb_tree_ray_cast_colliders(
+                query, &start[0], &dir[0], bitmask, results.data(), max_num_results, debug);
+            results.resize(n);
+            return results;
         }
     };
 

@@ -165,17 +165,16 @@ typedef struct {
 typedef struct wuzy_aabb_tree wuzy_aabb_tree;
 
 // Will return null if allocation fails. alloc may be null, in which case it will use malloc.
-// The colliders being inserted into the tree are leaf-nodes, but the tree will have internal
+// The nodes being inserted into the tree are leaf-nodes, but the tree will have internal
 // (non-leaf) nodes too, so that the total number of nodes allocated is larger.
-// Currently the largest max_num_colliders that can be passed to this function is 32757.
-wuzy_aabb_tree* wuzy_aabb_tree_create(size_t max_num_colliders, wuzy_allocator* alloc);
+wuzy_aabb_tree* wuzy_aabb_tree_create(size_t max_num_leaves, wuzy_allocator* alloc);
 
 void wuzy_aabb_tree_destroy(wuzy_aabb_tree* tree);
 
-/* The bitmask can be used to assign groups to colliders.
+/* The bitmask can be used to assign nodes to groups.
    Query and ray cast functions will only return nodes that share bits with the passed bit mask,
    i.e. `(a & b) > 0`.
-   If 0 is passed for the bitmask to the query of ray cast functions, there will be no filtering
+   If 0 is passed for the bitmask to the query or ray cast functions, there will be no filtering
    done based on the bitmask, i.e. it is as if 0xffff'ffff'ffff'ffff was passed.
  */
 
@@ -183,10 +182,14 @@ typedef struct wuzy_aabb_tree_init_node wuzy_aabb_tree_init_node;
 
 struct wuzy_aabb_tree_init_node {
     wuzy_aabb_tree_node id; // Will be set by wuzy_aabb_tree_init
-    // for internal nodes, left and right must be non-null and collider must be null
-    // for leaf nodes, left and right must be null and collider must be non-null
-    wuzy_collider* collider;
+
+    // for internal nodes, left and right must be non-null and userdata must be null
+    // for leaf nodes, left and right must be null and userdata must be non-null
+    void* userdata;
     uint64_t bitmask; // bitmask is ignored for internal nodes
+    float aabb_min[3];
+    float aabb_max[3];
+
     wuzy_aabb_tree_init_node* left;
     wuzy_aabb_tree_init_node* right;
 };
@@ -197,12 +200,12 @@ struct wuzy_aabb_tree_init_node {
 // You may also build even more optimized trees offline and load them in here.
 bool wuzy_aabb_tree_init(wuzy_aabb_tree* tree, wuzy_aabb_tree_init_node* root_node);
 
-// Instead of inserting a bunch of colliders and then rebuilding to improve the tree, you can use
-// this function to build a new tree from many colliders.
+// Instead of inserting a bunch of nodes and then rebuilding to improve the tree, you can use
+// this function to build a new tree from many nodes.
 // This function asserts that the tree is empty.
-// `bitmasks` may be nullptr in which case all bitmasks will be -1.
-void wuzy_aabb_tree_build(wuzy_aabb_tree* tree, wuzy_collider* const* colliders,
-    const uint64_t* bitmasks, size_t num_colliders, wuzy_aabb_tree_node* nodes);
+// wuzy_aabb_tree_init_node::left and wuzy_aabb_tree_init_node::right are unused.
+void wuzy_aabb_tree_build(
+    wuzy_aabb_tree* tree, wuzy_aabb_tree_init_node* leaves, size_t num_leaves);
 
 // This is very expensive (O(n^3)!), but should yield a near-optimal tree.
 // You likely want to do this offline and then use wuzy_aabb_tree_dump_tree and wuzy_aabb_tree_init.
@@ -215,9 +218,9 @@ void wuzy_aabb_tree_rebuild(wuzy_aabb_tree* tree);
 // Will return invalid node (id = 0) if the node could not be inserted (maximum number of nodes
 // reached).
 wuzy_aabb_tree_node wuzy_aabb_tree_insert(
-    wuzy_aabb_tree* tree, wuzy_collider* collider, uint64_t bitmask);
+    wuzy_aabb_tree* tree, void* userdata, uint64_t bitmask, const float min[3], const float max[3]);
 
-wuzy_collider* wuzy_aabb_tree_get_collider(wuzy_aabb_tree* tree, wuzy_aabb_tree_node node);
+void* wuzy_aabb_tree_get_userdata(wuzy_aabb_tree* tree, wuzy_aabb_tree_node node);
 
 typedef enum {
     // The default is REINSERT.
@@ -230,11 +233,10 @@ typedef enum {
     WUZY_AABB_TREE_UPDATE_FLAGS_REFIT,
 } wuzy_aabb_tree_update_mode;
 
-// This will compute the aabb of collider associated with this node again and update the tree
-// accordingly. Will return true if the given node exists (in which case it will be update) and
+// Will return true if the given node exists (in which case it will be updated) and
 // false if not. If 0 is passed for the bitmask, it is not changed.
 bool wuzy_aabb_tree_update(wuzy_aabb_tree* tree, wuzy_aabb_tree_node node, uint64_t bitmask,
-    wuzy_aabb_tree_update_mode mode);
+    const float min[3], const float max[3], wuzy_aabb_tree_update_mode mode);
 
 // Will return whether the given node existed before removal.
 bool wuzy_aabb_tree_remove(wuzy_aabb_tree* tree, wuzy_aabb_tree_node node);
@@ -243,10 +245,12 @@ typedef struct wuzy_aabb_tree_dump_node wuzy_aabb_tree_dump_node;
 
 struct wuzy_aabb_tree_dump_node {
     wuzy_aabb_tree_node id;
-    const wuzy_collider* collider; // will be null for internal nodes
+
+    const void* userdata; // will be null for internal nodes
+    uint64_t bitmask;
     float aabb_min[3];
     float aabb_max[3];
-    uint64_t bitmask;
+
     wuzy_aabb_tree_dump_node* parent;
     wuzy_aabb_tree_dump_node* left;
     wuzy_aabb_tree_dump_node* right;
@@ -258,72 +262,86 @@ size_t wuzy_aabb_tree_dump(
 
 typedef struct {
     size_t num_nodes;
-    size_t num_colliders;
+    size_t num_leaves;
     size_t max_num_nodes;
 } wuzy_aabb_tree_stats;
 
 void wuzy_aabb_tree_get_stats(const wuzy_aabb_tree* tree, wuzy_aabb_tree_stats* stats);
 
-typedef struct wuzy_aabb_tree_node_query wuzy_aabb_tree_node_query;
-
-// A query requires some storage that is likely too large for the stack and to avoid
-// unexpected (and repeated) dynamic allocations, you can create a query object beforehand. It can
-// be reused, but you can only use it for a single query at a time. If the tree itself is not
+// A query requires some storage (a stack of nodes) that is likely too large for the stack and to
+// avoid unexpected (and repeated) dynamic allocations, you can create a query object beforehand.
+// It can be reused, but you can only use it for a single query at a time. If the tree itself is not
 // modified, you can also perform multiple queries in parallel, as long as you don't use the same
 // query object simultaneously from multiple threads.
+
+typedef struct wuzy_aabb_tree_node_query wuzy_aabb_tree_node_query;
+
 wuzy_aabb_tree_node_query* wuzy_aabb_tree_node_query_create(
     const wuzy_aabb_tree* tree, wuzy_allocator* alloc);
 
 void wuzy_aabb_tree_node_query_destroy(wuzy_aabb_tree_node_query* query);
 
 // These are supposed to implement iterators. You start a query with _begin and then call _next
-// repeatedly (even with max_nodes = 1) until it returns less than max_nodes.
-// It's perfectly fine to _begin a query that's not finished yet.
-// The value returned is the number of results filled into the out parameter.
-
-// There was a generic begin function which took a aabb_test and a collider_test callback which
-// allowed implementing a point, aabb and ray cast query yourself, but it introduces overhead in the
-// common operations and I don't even think there is much of a use for it, so it's gone now.
+// repeatedly (even with max_num_results = 1) until it returns less than max_num_results.
+// I chose iterators here, because they are a bit more fundamental than callbacks (you can implement
+// a callback interface on top of iterators easily, but not the other way around).
+// It's perfectly fine to call _begin a query object that's not finished yet to start a new query.
 
 typedef struct wuzy_query_debug wuzy_query_debug;
 
+typedef bool (*wuzy_aabb_tree_node_query_aabb_test)(
+    void* query_userdata, const float aabb_min[3], const float aabb_max[3]);
+typedef bool (*wuzy_aabb_tree_node_query_node_test)(void* query_userdata, void* node_userdata);
+
+// This is the interface for a general query, which should not be required for basic usage.
+// The aabb_test callback is evaluated on the AABB of the tree node. Hence it does not get node
+// userdata as a parameter, because the node might be an internal node. Iff aaab_test passes and the
+// node is a leaf, the node_test will be evaluated as well. If that passes, the node is returned as
+// a result by _next.
+void wuzy_aabb_tree_node_query_begin(wuzy_aabb_tree_node_query* query, uint64_t bitmask,
+    void* query_userdata, wuzy_aabb_tree_node_query_aabb_test aabb_test,
+    wuzy_aabb_tree_node_query_node_test node_test, wuzy_query_debug* debug);
+
+typedef struct {
+    wuzy_aabb_tree_node node;
+    void* node_userdata; // preempt the likely get_userdata call
+} wuzy_aabb_tree_node_query_result;
+
+// Returns the number of results filled into the out parameter.
+size_t wuzy_aabb_tree_node_query_next(wuzy_aabb_tree_node_query* query,
+    wuzy_aabb_tree_node_query_result* results, size_t max_num_results);
+
+// The following two helpers store their userdata in a little buffer that is part of the query
+// object.
 void wuzy_aabb_tree_node_query_point_begin(wuzy_aabb_tree_node_query* query, const float point[3],
     uint64_t bitmask, wuzy_query_debug* debug);
 
 void wuzy_aabb_tree_node_query_aabb_begin(wuzy_aabb_tree_node_query* query, const float aabb_min[3],
     const float aabb_max[3], uint64_t bitmask, wuzy_query_debug* debug);
 
-size_t wuzy_aabb_tree_node_query_next(
-    wuzy_aabb_tree_node_query* query, wuzy_aabb_tree_node* nodes, size_t max_nodes);
-
-// Since a ray cast only has a single result, this function doesn't require a separate _begin and
-// _next.
-
-bool wuzy_aabb_tree_node_query_ray_cast(wuzy_aabb_tree_node_query* query, const float start[3],
-    const float dir[3], uint64_t bitmask, wuzy_aabb_tree_node* hit_node,
-    wuzy_ray_cast_result* result, wuzy_query_debug* debug);
-
-/*
+// This is a helper in case userdata is a wuzy_collider* (the most common case).
+// It will get the first `max_num_results` hits and return the number of hits.
 typedef struct {
-    wuzy_aabb_tree_node a;
-    wuzy_aabb_tree_node b;
-} wuzy_aabb_tree_node_pair;
+    wuzy_aabb_tree_node node;
+    wuzy_collider* collider;
+    wuzy_ray_cast_result hit;
+} wuzy_ray_cast_colliders_result;
 
-typedef struct wuzy_aabb_tree_pair_query wuzy_aabb_tree_pair_query;
+// This is designed for rather small `max_num_results` as it does a linear search in `results`
+size_t wuzy_aabb_tree_ray_cast_colliders(wuzy_aabb_tree_node_query* query, const float start[3],
+    const float dir[3], uint64_t bitmask, wuzy_ray_cast_colliders_result* results,
+    size_t max_num_results, wuzy_query_debug* debug);
 
-wuzy_aabb_tree_pair_query* wuzy_aabb_tree_pair_query_create(
-    const wuzy_aabb_tree* tree, wuzy_allocator* alloc);
+typedef struct {
+    wuzy_aabb_tree_node node;
+    wuzy_triangle_collider_userdata* tri;
+    wuzy_ray_cast_result hit;
+} wuzy_ray_cast_tris_result;
 
-void wuzy_aabb_tree_pair_query_destroy(wuzy_aabb_tree_pair_query* query);
-
-void wuzy_aabb_tree_pair_query_begin(wuzy_aabb_tree_pair_query* query);
-
-size_t wuzy_aabb_tree_pair_query_next(
-    wuzy_aabb_tree_pair_query* query, wuzy_aabb_tree_node_pair* pairs, size_t max_pairs);
-
-size_t wuzy_aabb_tree_pair_query_all(wuzy_aabb_tree_pair_query* query,
-    void (*callback)(void*, wuzy_aabb_tree_node, wuzy_aabb_tree_node), void* userdata);
-*/
+// This is a helper in case userdata is a triangle (wuzy_triangle_collider_userdata*)
+size_t wuzy_aabb_tree_ray_cast_tris(wuzy_aabb_tree_node_query* query, const float start[3],
+    const float dir[3], uint64_t bitmask, wuzy_ray_cast_tris_result* results,
+    size_t max_num_results, wuzy_query_debug* debug);
 
 // Debug Types
 // All pointers in these types will be filled with dynamically allocated memory. I could size them

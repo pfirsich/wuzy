@@ -137,7 +137,7 @@ Aabb get_aabb(const wuzy_aabb_tree_dump_node* node)
 uint32_t collect_aabbs(
     std::vector<std::pair<Aabb, uint32_t>>& aabbs, const wuzy_aabb_tree_dump_node* node)
 {
-    if (node->collider) {
+    if (node->userdata) { // leaf
         aabbs.push_back({ get_aabb(node), 0 });
         return 0;
     } else {
@@ -361,13 +361,13 @@ int main()
             broadphase.update(player_node);
             const auto [aabb_min, aabb_max] = player_collider.get_aabb<glm::vec3>();
             bp_query.begin(aabb_min, aabb_max);
-            for (auto node : bp_query.all()) {
-                if (node.id == player_node.id) {
+            for (auto res : bp_query.all()) {
+                if (res.node.id == player_node.id) {
                     continue;
                 }
-                const auto obstacle_idx = obstacle_idx_map.at(node.id);
+                const auto obstacle_idx = obstacle_idx_map.at(res.node.id);
                 auto& obstacle = obstacles[obstacle_idx];
-                assert(obstacle.bp_node.id == node.id);
+                assert(obstacle.bp_node.id == res.node.id);
                 obstacle.candidate = true;
                 if (const auto col
                     = wuzy::get_collision<glm::vec3>(player_collider, *obstacle.collider)) {
@@ -438,12 +438,12 @@ int main()
             debug_draw.aabb(color, aabb.min, aabb.max + height_offset);
         }
 
-        const auto rc = bp_query.ray_cast(camera_trafo.getPosition(), camera_trafo.getForward());
-        if (rc) {
-            const auto [node, res] = *rc;
-            debug_draw.diamond(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), res.hit_position, 0.05f);
-            debug_draw.arrow(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), res.hit_position,
-                res.hit_position + res.normal * 0.2f);
+        const auto res = bp_query.ray_cast(camera_trafo.getPosition(), camera_trafo.getForward());
+        if (res) {
+            const auto hit_pos = glm::make_vec3(res->hit.hit_position);
+            debug_draw.diamond(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), hit_pos, 0.05f);
+            debug_draw.arrow(glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), hit_pos,
+                hit_pos + glm::make_vec3(res->hit.normal) * 0.2f);
         }
 
         window.swap();
