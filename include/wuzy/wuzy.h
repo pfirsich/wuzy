@@ -90,6 +90,9 @@ typedef struct {
     float normal[3];
 } wuzy_triangle_collider_userdata;
 
+// This calculates the non-normalized normal
+void wuzy_triangle_collider_userdata_calculate_normal(wuzy_triangle_collider_userdata* tri);
+
 // This calculates the normal from vertices, initializes transform and inverse_transform with
 // identity matrices and sets collider->support_func, collider->ray_cast_func and
 // collider->userdata.

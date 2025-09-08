@@ -530,6 +530,11 @@ EXPORT bool wuzy_calculate_normals(const float* vertices, size_t num_vertices,
     return true;
 }
 
+EXPORT void wuzy_triangle_collider_userdata_calculate_normal(wuzy_triangle_collider_userdata* tri)
+{
+    copy(tri->normal, calculate_normal(tri->vertices[0], tri->vertices[1], tri->vertices[2]));
+}
+
 EXPORT void wuzy_triangle_collider_init(
     wuzy_collider* collider, wuzy_triangle_collider_userdata* userdata)
 {
@@ -542,8 +547,7 @@ EXPORT void wuzy_triangle_collider_init(
     collider->userdata = userdata;
     collider->support_func = wuzy_triangle_collider_support;
     collider->ray_cast_func = wuzy_triangle_collider_ray_cast;
-    copy(userdata->normal,
-        calculate_normal(userdata->vertices[0], userdata->vertices[1], userdata->vertices[2]));
+    wuzy_triangle_collider_userdata_calculate_normal(userdata);
 }
 
 EXPORT void wuzy_triangle_collider_support(const void* userdata, const float dir[3], float sup[3])
