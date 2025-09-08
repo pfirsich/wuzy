@@ -1967,7 +1967,7 @@ EXPORT size_t wuzy_aabb_tree_node_query_next(wuzy_aabb_tree_node_query* wquery,
 {
     auto query = reinterpret_cast<NodeQuery*>(wquery);
     size_t num_results = 0;
-    while (query->node_stack_size && num_results < max_num_results) {
+    while (query->node_stack_size && (!results || num_results < max_num_results)) {
         auto node = query->node_stack[--query->node_stack_size];
         if (query->debug) {
             query->debug->nodes_checked++;
@@ -1992,10 +1992,13 @@ EXPORT size_t wuzy_aabb_tree_node_query_next(wuzy_aabb_tree_node_query* wquery,
                     if (query->debug) {
                         query->debug->full_checks_passed++;
                     }
-                    results[num_results++] = wuzy_aabb_tree_node_query_result {
-                        { query->tree->get_id(node) },
-                        node->userdata,
-                    };
+                    if (results) {
+                        results[num_results] = wuzy_aabb_tree_node_query_result {
+                            { query->tree->get_id(node) },
+                            node->userdata,
+                        };
+                    }
+                    num_results++;
                 }
             } else {
                 assert(query->node_stack_size + 2 <= query->node_stack_capacity);

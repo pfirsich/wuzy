@@ -316,6 +316,8 @@ typedef struct {
 } wuzy_aabb_tree_node_query_result;
 
 // Returns the number of results filled into the out parameter.
+// results may be NULL in which case this function will return the number of results
+// (max_num_results is ignored then).
 size_t wuzy_aabb_tree_node_query_next(wuzy_aabb_tree_node_query* query,
     wuzy_aabb_tree_node_query_result* results, size_t max_num_results);
 
