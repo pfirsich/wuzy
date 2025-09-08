@@ -149,6 +149,21 @@ void create_colliders(const tinyobj::ObjReader& reader)
     wuzy_hl_collider_create_mesh(mesh);
 }
 
+glm::vec3 compute_mtv(std::span<wuzy_collision_result> cols)
+{
+    // first take weighted average
+    glm::vec3 mtv = { 0.0f, 0.0f, 0.0f };
+    for (const auto& col : cols) {
+        mtv += glm::make_vec3(col.normal) * col.depth;
+    }
+    // find a length that clears the largest collision
+    const auto n = glm::make_vec3(cols[0].normal);
+    const auto d = cols[0].depth;
+    // project mtv onto deepest collision normal
+    mtv *= -d / glm::dot(mtv, glm::normalize(n));
+    return mtv;
+}
+
 bool move_player(wuzy_hl_collider_id collider, glwx::Transform& trafo, glm::vec3& velocity,
     const glm::vec3& move, bool jump, float dt)
 {
@@ -220,14 +235,12 @@ bool move_player(wuzy_hl_collider_id collider, glwx::Transform& trafo, glm::vec3
     bool collision = false;
     for (const auto other : candidates) {
         for (size_t i = 0; i < 8; ++i) {
-            wuzy_collision_result col;
-            if (wuzy_hl_get_collisions(collider, other, &col, 1)) {
-                const auto mtv = -glm::make_vec3(col.normal) * col.depth * 1.0f;
-                trafo.move(mtv);
+            static std::array<wuzy_collision_result, 4> cols;
+            const auto n = wuzy_hl_get_collisions(collider, other, cols.data(), cols.size());
+            if (n > 0) {
+                trafo.move(compute_mtv(std::span(cols).first(n)));
                 wuzy_hl_collider_set_transform(collider, &trafo.getMatrix()[0].x);
                 collision = true;
-            } else {
-                break;
             }
         }
     }
