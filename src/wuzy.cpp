@@ -2128,8 +2128,8 @@ EXPORT size_t wuzy_aabb_tree_ray_cast_colliders(wuzy_aabb_tree_node_query* wquer
     auto query = reinterpret_cast<NodeQuery*>(wquery);
     return ray_cast_generic(
         query, start, dir, bitmask, results, max_num_results, debug,
-        [](void* userdata, const float start[3], const float dir[3], wuzy_ray_cast_result* hit) {
-            return wuzy_collider_ray_cast((wuzy_collider*)userdata, start, dir, hit);
+        [](void* node_userdata, const float* start, const float* dir, wuzy_ray_cast_result* hit) {
+            return wuzy_collider_ray_cast((wuzy_collider*)node_userdata, start, dir, hit);
         },
         [query](Node* node, const wuzy_ray_cast_result& hit) {
             return wuzy_ray_cast_colliders_result {
@@ -2144,11 +2144,12 @@ EXPORT size_t wuzy_aabb_tree_ray_cast_tris(wuzy_aabb_tree_node_query* wquery, co
     const float dir[3], uint64_t bitmask, wuzy_ray_cast_tris_result* results,
     size_t max_num_results, wuzy_query_debug* debug)
 {
+
     auto query = reinterpret_cast<NodeQuery*>(wquery);
     return ray_cast_generic(
         query, start, dir, bitmask, results, max_num_results, debug,
-        [](void* userdata, const float* start, const float* dir, wuzy_ray_cast_result* hit) {
-            return wuzy_triangle_collider_ray_cast(userdata, start, dir, hit);
+        [](void* node_userdata, const float* start, const float* dir, wuzy_ray_cast_result* hit) {
+            return wuzy_triangle_collider_ray_cast(node_userdata, start, dir, hit);
         },
         [query](Node* node, const wuzy_ray_cast_result& hit) {
             return wuzy_ray_cast_tris_result {
