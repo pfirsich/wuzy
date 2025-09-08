@@ -2038,12 +2038,12 @@ EXPORT void wuzy_aabb_tree_node_query_aabb_begin(wuzy_aabb_tree_node_query* wque
 }
 
 template <typename Result>
-static void add_hit(Result* results, size_t num_results, size_t max_num_results, Result res)
+static size_t add_hit(Result* results, size_t num_results, size_t max_num_results, Result res)
 {
-    // We have already checked that res.hit.t is smaller than results[num_results - 1].hit.t
-    if (num_results <= 1) {
+    // already checked: num_results < max_num_results || temp_res.t < results[num_results - 1].hit.t
+    if (max_num_results == 1) {
         results[0] = res;
-        return;
+        return 1;
     }
 
     size_t insert = 0;
@@ -2091,7 +2091,8 @@ static size_t ray_cast_generic(NodeQuery* query, const float start[3], const flo
 
         const auto aabb_hit
             = ray_cast(node->aabb.min, node->aabb.max, v3(start), v3(dir), &temp_res);
-        if (aabb_hit && (num_results == 0 || temp_res.t < results[num_results - 1].hit.t)) {
+        if (aabb_hit
+            && (num_results < max_num_results || temp_res.t < results[num_results - 1].hit.t)) {
             if (debug) {
                 debug->aabb_checks_passed++;
             }
@@ -2100,14 +2101,14 @@ static size_t ray_cast_generic(NodeQuery* query, const float start[3], const flo
                     debug->leaves_checked++;
                 }
                 const auto leaf_hit = ray_cast_leaf(node->userdata, start, dir, &temp_res);
-                if (leaf_hit && (num_results == 0 || temp_res.t < results[num_results - 1].hit.t)) {
+                if (leaf_hit
+                    && (num_results < max_num_results
+                        || temp_res.t < results[num_results - 1].hit.t)) {
                     if (debug) {
                         debug->full_checks_passed++;
                     }
-                    add_hit(results, num_results, max_num_results, make_result(node, temp_res));
-                    if (num_results < max_num_results) {
-                        num_results++;
-                    }
+                    num_results = add_hit(
+                        results, num_results, max_num_results, make_result(node, temp_res));
                 }
             } else {
                 assert(query->node_stack_size + 2 <= query->node_stack_capacity);
