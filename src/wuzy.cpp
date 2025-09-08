@@ -12,7 +12,7 @@
 
 #define EXPORT extern "C"
 
-namespace {
+namespace wuzy {
 wuzy_allocator* default_allocator()
 {
     static wuzy_allocator alloc {
@@ -111,37 +111,37 @@ struct vec4_view {
     float operator[](size_t idx) const { return *(data + idx); }
 };
 
-vec3 make_vec3(const float v[3])
+static vec3 make_vec3(const float v[3])
 {
     return { v[x], v[y], v[z] };
 }
 
-void copy(float dst[3], vec3_view src)
+static void copy(float dst[3], vec3_view src)
 {
     std::memcpy(dst, src.data, sizeof(float) * 3);
 }
 
-vec3 add(vec3_view a, vec3_view b)
+static vec3 add(vec3_view a, vec3_view b)
 {
     return vec3 { a[x] + b[x], a[y] + b[y], a[z] + b[z] };
 }
 
-vec3 sub(vec3_view a, vec3_view b)
+static vec3 sub(vec3_view a, vec3_view b)
 {
     return vec3 { a[x] - b[x], a[y] - b[y], a[z] - b[z] };
 }
 
-float dot(vec3_view a, vec3_view b)
+static float dot(vec3_view a, vec3_view b)
 {
     return a[x] * b[x] + a[y] * b[y] + a[z] * b[z];
 }
 
-float dot(vec4_view a, vec4_view b)
+static float dot(vec4_view a, vec4_view b)
 {
     return a[x] * b[x] + a[y] * b[y] + a[z] * b[z] + a[w] * b[w];
 }
 
-vec3 cross(vec3_view a, vec3_view b)
+static vec3 cross(vec3_view a, vec3_view b)
 {
     return vec3 {
         a[y] * b[z] - a[z] * b[y],
@@ -150,43 +150,43 @@ vec3 cross(vec3_view a, vec3_view b)
     };
 }
 
-float length(vec3_view v)
+static float length(vec3_view v)
 {
     return std::sqrt(dot(v, v));
 }
 
-float length(vec4_view v)
+static float length(vec4_view v)
 {
     return std::sqrt(dot(v, v));
 }
 
-vec3 mul(vec3_view v, float s)
+static vec3 mul(vec3_view v, float s)
 {
     return vec3 { v[x] * s, v[y] * s, v[z] * s };
 }
 
-vec4 mul(vec4_view v, float s)
+static vec4 mul(vec4_view v, float s)
 {
     return vec4 { v[x] * s, v[y] * s, v[z] * s, v[w] * s };
 }
 
-vec3 normalize(vec3_view v)
+static vec3 normalize(vec3_view v)
 {
     const auto len = length(v);
     return vec3 { v[x] / len, v[y] / len, v[z] / len };
 }
 
-[[maybe_unused]] bool is_finite(vec3_view v)
+[[maybe_unused]] static bool is_finite(vec3_view v)
 {
     return std::isfinite(v[x]) && std::isfinite(v[y]) && std::isfinite(v[z]);
 }
 
-vec3 vmin(vec3_view a, vec3_view b)
+static vec3 vmin(vec3_view a, vec3_view b)
 {
     return { std::min(a[x], b[x]), std::min(a[y], b[y]), std::min(a[z], b[z]) };
 }
 
-vec3 vmax(vec3_view a, vec3_view b)
+static vec3 vmax(vec3_view a, vec3_view b)
 {
     return { std::max(a[x], b[x]), std::max(a[y], b[y]), std::max(a[z], b[z]) };
 }
@@ -209,12 +209,12 @@ struct mat4_view {
     vec4_view operator[](size_t idx) const { return vec4_view(data + idx * 4); }
 };
 
-mat4_view m4(const float m[16])
+static mat4_view m4(const float m[16])
 {
     return mat4_view(m);
 }
 
-mat4 transpose(mat4_view m)
+static mat4 transpose(mat4_view m)
 {
     return {
         vec4 { m[0][x], m[1][x], m[2][x], m[3][x] },
@@ -224,12 +224,12 @@ mat4 transpose(mat4_view m)
     };
 }
 
-void copy(float dst[16], mat4_view src)
+static void copy(float dst[16], mat4_view src)
 {
     std::memcpy(dst, src.data, sizeof(float) * 16);
 }
 
-mat4 mul(mat4_view a, mat4_view b)
+static mat4 mul(mat4_view a, mat4_view b)
 {
     const auto tr = transpose(a);
     const auto& r = tr.cols; // a rows
@@ -241,7 +241,7 @@ mat4 mul(mat4_view a, mat4_view b)
     };
 }
 
-vec3 mul(mat4_view m, vec3_view v, float w)
+static vec3 mul(mat4_view m, vec3_view v, float w)
 {
     const auto tr = transpose(m);
     const auto& rows = tr.cols;
@@ -249,7 +249,7 @@ vec3 mul(mat4_view m, vec3_view v, float w)
     return vec3 { dot(rows[0], vec), dot(rows[1], vec), dot(rows[2], vec) };
 }
 
-mat4 identity()
+static mat4 identity()
 {
     return {
         vec4 { 1.0f, 0.0f, 0.0f, 0.0f },
@@ -271,24 +271,24 @@ struct Aabb {
     }
 };
 
-bool overlap(const Aabb& a, const Aabb& b)
+static bool overlap(const Aabb& a, const Aabb& b)
 {
     return a.min.x <= b.max.x && a.min.y <= b.max.y && a.min.z <= b.max.z && a.max.x >= b.min.x
         && a.max.y >= b.min.y && a.max.z >= b.min.z;
 }
 
-bool contains(const Aabb& aabb, const vec3_view& p)
+static bool contains(const Aabb& aabb, const vec3_view& p)
 {
     return p[x] >= aabb.min.x && p[y] >= aabb.min.y && p[z] >= aabb.min.z && p[x] <= aabb.max.x
         && p[y] <= aabb.max.y && p[z] <= aabb.max.z;
 }
 
-Aabb combine(const Aabb& a, const Aabb& b)
+static Aabb combine(const Aabb& a, const Aabb& b)
 {
     return Aabb { vmin(a.min, b.min), vmax(a.max, b.max) };
 }
 
-[[maybe_unused]] float volume(const Aabb& aabb)
+[[maybe_unused]] static float volume(const Aabb& aabb)
 {
     const auto s = sub(aabb.max, aabb.min);
     return s.x * s.y * s.z;
@@ -400,7 +400,6 @@ private:
     std::span<T> data_;
     size_t size_ = 0;
 };
-}
 
 EXPORT void wuzy_invert_trs(const float mat[16], float inv[16])
 {
@@ -718,21 +717,20 @@ EXPORT bool wuzy_convex_polyhedron_collider_ray_cast(
     return true;
 }
 
-namespace {
 // Support function of the minkowski difference `a - b`.
-vec3 support(const wuzy_collider* a, const wuzy_collider* b, vec3_view dir)
+static vec3 support(const wuzy_collider* a, const wuzy_collider* b, vec3_view dir)
 {
     const auto a_sup = collider_support(a, dir);
     const auto b_sup = collider_support(b, mul(dir, -1.0f));
     return sub(a_sup, b_sup);
 }
 
-bool same_half_space(vec3_view a, vec3_view b)
+static bool same_half_space(vec3_view a, vec3_view b)
 {
     return dot(a, b) > 0.0f;
 }
 
-wuzy_simplex3d make_simplex(vec3_view v0)
+static wuzy_simplex3d make_simplex(vec3_view v0)
 {
     wuzy_simplex3d simplex;
     copy(simplex.vertices[0], v0);
@@ -740,7 +738,7 @@ wuzy_simplex3d make_simplex(vec3_view v0)
     return simplex;
 }
 
-wuzy_simplex3d make_simplex(vec3_view v0, vec3_view v1)
+static wuzy_simplex3d make_simplex(vec3_view v0, vec3_view v1)
 {
     wuzy_simplex3d simplex;
     copy(simplex.vertices[0], v0);
@@ -749,7 +747,7 @@ wuzy_simplex3d make_simplex(vec3_view v0, vec3_view v1)
     return simplex;
 }
 
-wuzy_simplex3d make_simplex(vec3_view v0, vec3_view v1, vec3_view v2)
+static wuzy_simplex3d make_simplex(vec3_view v0, vec3_view v1, vec3_view v2)
 {
     wuzy_simplex3d simplex;
     copy(simplex.vertices[0], v0);
@@ -793,7 +791,7 @@ struct NextSimplexResult {
     }
 };
 
-NextSimplexResult line(const wuzy_simplex3d& simplex, vec3_view /*direction*/)
+static NextSimplexResult line(const wuzy_simplex3d& simplex, vec3_view /*direction*/)
 {
     /*
      *            .           .
@@ -852,7 +850,7 @@ NextSimplexResult line(const wuzy_simplex3d& simplex, vec3_view /*direction*/)
     }
 }
 
-NextSimplexResult triangle(const wuzy_simplex3d& simplex, vec3_view direction)
+static NextSimplexResult triangle(const wuzy_simplex3d& simplex, vec3_view direction)
 {
     /*
      *                   .
@@ -939,7 +937,7 @@ NextSimplexResult triangle(const wuzy_simplex3d& simplex, vec3_view direction)
     }
 }
 
-NextSimplexResult tetrahedron(const wuzy_simplex3d& simplex, vec3_view direction)
+static NextSimplexResult tetrahedron(const wuzy_simplex3d& simplex, vec3_view direction)
 {
     /*
      * This is pretty bad, but I can't do it much better.
@@ -997,7 +995,7 @@ NextSimplexResult tetrahedron(const wuzy_simplex3d& simplex, vec3_view direction
     return { simplex, direction, true };
 }
 
-NextSimplexResult next_simplex(const wuzy_simplex3d& simplex, vec3_view direction)
+static NextSimplexResult next_simplex(const wuzy_simplex3d& simplex, vec3_view direction)
 {
     switch (simplex.num_vertices) {
     case 2:
@@ -1012,7 +1010,7 @@ NextSimplexResult next_simplex(const wuzy_simplex3d& simplex, vec3_view directio
     }
 }
 
-void push_front(wuzy_simplex3d& simplex, vec3_view v)
+static void push_front(wuzy_simplex3d& simplex, vec3_view v)
 {
     copy(simplex.vertices[3], v3(simplex.vertices[2]));
     copy(simplex.vertices[2], v3(simplex.vertices[1]));
@@ -1022,8 +1020,8 @@ void push_front(wuzy_simplex3d& simplex, vec3_view v)
     simplex.num_vertices++;
 }
 
-void add_debug_iteration(wuzy_gjk_debug* debug, const wuzy_collider* c1, const wuzy_collider* c2,
-    const vec3& direction, const vec3& support)
+static void add_debug_iteration(wuzy_gjk_debug* debug, const wuzy_collider* c1,
+    const wuzy_collider* c2, const vec3& direction, const vec3& support)
 {
     if (!debug) {
         return;
@@ -1049,7 +1047,6 @@ void add_debug_iteration(wuzy_gjk_debug* debug, const wuzy_collider* c1, const w
         .simplex = {},
         .contains_origin = false,
     };
-}
 }
 
 EXPORT bool wuzy_gjk(
@@ -1139,7 +1136,6 @@ EXPORT bool wuzy_test_collision(
     return wuzy_gjk(a, b, &res, debug);
 }
 
-namespace {
 struct EpaTriangle {
     size_t v0;
     size_t v1;
@@ -1148,7 +1144,7 @@ struct EpaTriangle {
     float dist = 0.0f; // Distance to origin
 };
 
-void update_normal(std::span<const vec3> vertices, EpaTriangle& face, bool flip = true)
+static void update_normal(std::span<const vec3> vertices, EpaTriangle& face, bool flip = true)
 {
     assert(face.v0 < vertices.size() && face.v1 < vertices.size() && face.v2 < vertices.size());
     const auto& v0 = vertices[face.v0];
@@ -1184,7 +1180,7 @@ void update_normal(std::span<const vec3> vertices, EpaTriangle& face, bool flip 
 }
 
 // Returns the index of the face closest to the origin and its distance.
-std::pair<size_t, float> get_closest_face(std::span<const EpaTriangle> faces)
+static std::pair<size_t, float> get_closest_face(std::span<const EpaTriangle> faces)
 {
     float min_dist = std::numeric_limits<float>::max();
     size_t min_face_idx = 0;
@@ -1202,7 +1198,7 @@ std::pair<size_t, float> get_closest_face(std::span<const EpaTriangle> faces)
 
 using Edge = std::pair<size_t, size_t>;
 
-void add_unique_edge(VecAdapter<Edge>& edges_to_patch, size_t first, size_t second)
+static void add_unique_edge(VecAdapter<Edge>& edges_to_patch, size_t first, size_t second)
 {
     // If the edge is part of multiple triangles, we DO NOT want to patch it, because it
     // would create internal geometry, which will mess up everything.
@@ -1217,7 +1213,6 @@ void add_unique_edge(VecAdapter<Edge>& edges_to_patch, size_t first, size_t seco
         edges_to_patch.push_back(Edge(first, second));
     }
 };
-}
 
 EXPORT wuzy_collision_result wuzy_epa(const wuzy_collider* c1, const wuzy_collider* c2,
     const wuzy_simplex3d* simplex, wuzy_epa_debug* debug)
@@ -1406,23 +1401,22 @@ EXPORT bool wuzy_get_collision(const wuzy_collider* a, const wuzy_collider* b,
     return true;
 }
 
-namespace {
 // To change the Id layout, only the following typedefs and three functions should be changed.
 using IdType = decltype(wuzy_aabb_tree_node::id);
 using GenerationType = uint16_t;
 using IndexType = uint32_t;
 
-IndexType id_get_idx(IdType id)
+static IndexType id_get_idx(IdType id)
 {
     return static_cast<IndexType>(id & 0xFFFF'FFFF);
 }
 
-GenerationType id_get_gen(IdType id)
+static GenerationType id_get_gen(IdType id)
 {
     return static_cast<GenerationType>(id >> 32);
 }
 
-IdType id_combine(uint32_t idx, uint32_t gen)
+static IdType id_combine(uint32_t idx, uint32_t gen)
 {
     return static_cast<IdType>(gen) << 32 | idx;
 }
@@ -1610,7 +1604,6 @@ struct AabbTree {
         return node->generation == gen ? node : nullptr;
     }
 };
-}
 
 EXPORT wuzy_aabb_tree* wuzy_aabb_tree_create(size_t max_num_leaves, wuzy_allocator* alloc)
 {
@@ -1652,8 +1645,7 @@ EXPORT void wuzy_aabb_tree_destroy(wuzy_aabb_tree* wtree)
     deallocate(tree->alloc, tree);
 }
 
-namespace {
-Node* insert_node(AabbTree* tree, Node* parent, wuzy_aabb_tree_init_node* init_node)
+static Node* insert_node(AabbTree* tree, Node* parent, wuzy_aabb_tree_init_node* init_node)
 {
     auto node = tree->get_new_node();
     if (!node) {
@@ -1674,7 +1666,6 @@ Node* insert_node(AabbTree* tree, Node* parent, wuzy_aabb_tree_init_node* init_n
         node->update_from_children();
     }
     return node;
-}
 }
 
 EXPORT bool wuzy_aabb_tree_init(wuzy_aabb_tree* wtree, wuzy_aabb_tree_init_node* root_node)
@@ -1853,8 +1844,7 @@ EXPORT bool wuzy_aabb_tree_remove(wuzy_aabb_tree* wtree, wuzy_aabb_tree_node wno
     return true;
 }
 
-namespace {
-wuzy_aabb_tree_dump_node* add_node(const AabbTree* tree, Node* node,
+static wuzy_aabb_tree_dump_node* add_node(const AabbTree* tree, Node* node,
     wuzy_aabb_tree_dump_node* parent, wuzy_aabb_tree_dump_node* nodes, size_t* num_nodes,
     size_t max_num_nodes)
 {
@@ -1870,7 +1860,6 @@ wuzy_aabb_tree_dump_node* add_node(const AabbTree* tree, Node* node,
     nodes[idx].left = add_node(tree, node->left, nodes + idx, nodes, num_nodes, max_num_nodes);
     nodes[idx].right = add_node(tree, node->right, nodes + idx, nodes, num_nodes, max_num_nodes);
     return nodes + idx;
-}
 }
 
 EXPORT size_t wuzy_aabb_tree_dump(
@@ -1893,7 +1882,6 @@ EXPORT void wuzy_aabb_tree_get_stats(const wuzy_aabb_tree* wtree, wuzy_aabb_tree
     stats->max_num_nodes = tree->max_num_nodes;
 }
 
-namespace {
 struct NodeQuery {
     enum class Type { Generic = 0, Point, Aabb, RayCast };
 
@@ -1913,7 +1901,6 @@ struct NodeQuery {
     wuzy_aabb_tree_node_query_node_test node_test;
     wuzy_query_debug* debug;
 };
-}
 
 EXPORT wuzy_aabb_tree_node_query* wuzy_aabb_tree_node_query_create(
     const wuzy_aabb_tree* wtree, wuzy_allocator* alloc)
@@ -2066,18 +2053,18 @@ static void add_hit(Result* results, size_t num_results, size_t max_num_results,
         }
     }
 
-    // shift right [insert, num-results)
-    // TODO: fix num_results == 0
-    for (size_t i = num_results - 1; i > insert; --i) {
-        if (i + 1 < max_num_results) {
-            results[i + 1] = results[i];
-        }
+    // shift up from insert
+    const auto end = (num_results < max_num_results) ? num_results : (max_num_results - 1);
+    for (size_t i = end; i > insert; --i) {
+        results[i] = results[i - 1];
     }
     results[insert] = res;
+
+    return num_results < max_num_results ? num_results + 1 : max_num_results;
 }
 
 template <typename Result, typename LeafRayCast, typename MakeResult>
-size_t ray_cast_generic(NodeQuery* query, const float start[3], const float dir[3],
+static size_t ray_cast_generic(NodeQuery* query, const float start[3], const float dir[3],
     uint64_t bitmask, Result* results, size_t max_num_results, wuzy_query_debug* debug,
     LeafRayCast&& ray_cast_leaf, MakeResult&& make_result)
 {
@@ -2169,4 +2156,5 @@ EXPORT size_t wuzy_aabb_tree_ray_cast_tris(wuzy_aabb_tree_node_query* wquery, co
                 hit,
             };
         });
+}
 }
