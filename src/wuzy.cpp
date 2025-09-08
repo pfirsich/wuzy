@@ -10,54 +10,11 @@
 #include <tuple>
 #include <vector>
 
+#include "shared.hpp"
+
 #define EXPORT extern "C"
 
 namespace wuzy {
-wuzy_allocator* default_allocator()
-{
-    static wuzy_allocator alloc {
-        .allocate = [](size_t size, void*) -> void* { return std::malloc(size); },
-        .reallocate = [](void* ptr, size_t, size_t new_size, void*) -> void* {
-            return std::realloc(ptr, new_size);
-        },
-        .deallocate = [](void* ptr, size_t, void*) { std::free(ptr); },
-        .ctx = nullptr,
-    };
-    return &alloc;
-}
-
-template <typename T>
-T* allocate(wuzy_allocator* alloc, size_t count = 1)
-{
-    alloc = alloc ? alloc : default_allocator();
-    // NOLINTNEXTLINE(bugprone-sizeof-expression)
-    auto ptr = reinterpret_cast<T*>(alloc->allocate(sizeof(T) * count, alloc->ctx));
-    for (size_t i = 0; i < count; ++i) {
-        new (ptr + i) T {};
-    }
-    return ptr;
-}
-
-template <typename T>
-T* reallocate(wuzy_allocator* alloc, T* ptr, size_t old_count, size_t new_count)
-{
-    static_assert(std::is_trivially_copyable_v<T>);
-    alloc = alloc ? alloc : default_allocator();
-    ptr = reinterpret_cast<T*>(
-        alloc->reallocate(ptr, sizeof(T) * old_count, sizeof(T) * new_count, alloc->ctx));
-    return ptr;
-}
-
-template <typename T>
-void deallocate(wuzy_allocator* alloc, T* ptr, size_t count = 1)
-{
-    alloc = alloc ? alloc : default_allocator();
-    for (size_t i = 0; i < count; ++i) {
-        (ptr + i)->~T();
-    }
-    // NOLINTNEXTLINE(bugprone-sizeof-expression)
-    return alloc->deallocate(ptr, sizeof(T) * count, alloc->ctx);
-}
 
 static constexpr int x = 0;
 static constexpr int y = 1;

@@ -6,105 +6,117 @@ extern "C" {
 
 #include "wuzy.h"
 
-// This high-level layer is much more liberal with allocation and will
+// All functions abort (assert) on invalid handles, capacity exhaustion, or null preconditions.
+// Release builds still abort via a fatal path; returning values are always valid postconditions.
+// This library is purely single-threaded and does no locking.
 
-typedef struct wuzy_collision_system wuzy_collision_system;
+// All ids are 24 bits generation and 24 bits index, so they fit into 48 bits and will be
+// exactly representable by a double.
 
 typedef struct {
-    uint32_t id;
-} wuzy_collider_handle;
+    uint64_t id; // 0 is invalid
+} wuzy_hl_collider_id;
+
+typedef struct {
+    uint64_t id; // 0 is invalid
+} wuzy_hl_convex_polyhedron_id;
+
+typedef struct {
+    uint64_t id; // 0 is invalid
+} wuzy_hl_mesh_id;
 
 typedef struct {
     wuzy_allocator* allocator; // default will use malloc
     size_t max_num_colliders; // no default
-    size_t max_num_triangle_colliders; // default:
-    size_t max_num_sphere_colliders; // default:
-    size_t max_num_convex_polyhedron_colliders; // default:
-    size_t max_num_vertices; // default:
-    size_t max_num_faces; // default:
-    size_t max_num_queries; // default: 8
-} wuzy_collision_system_create_params;
+    size_t max_num_convex_polyhedra; // default: 16
+    size_t max_num_meshes; // default: 16
+} wuzy_hl_create_params;
 
-wuzy_collision_system* wuzy_collision_system_create(wuzy_collision_system_create_params params);
+void wuzy_hl_init(wuzy_hl_create_params params);
+void wuzy_hl_shutdown(void);
 
-wuzy_collider_handle wuzy_collision_system_collider_create_triangle(
-    wuzy_collision_system* system, wuzy_vec3 v0, wuzy_vec3 v1, wuzy_vec3 v2);
+// 3 floats per vertex, 3 indices per face. faces are triangles.
+wuzy_hl_convex_polyhedron_id wuzy_hl_convex_polyhedron_create(
+    const float* vertices, size_t num_vertices, const uint32_t* face_indices, size_t num_faces);
+// Destroying a convex polyhedron referenced by a collider is UB
+void wuzy_hl_convex_polyhedron_destroy(wuzy_hl_convex_polyhedron_id convex);
 
-wuzy_collider_handle wuzy_collision_system_collider_create_sphere(
-    wuzy_collision_system* system, float radius);
+// This builds an optimized bounding volume hierarchy.
+wuzy_hl_mesh_id wuzy_hl_mesh_create(
+    const float* vertices, size_t num_vertices, const uint32_t* face_indices, size_t num_faces);
+// Destroying a mesh referenced by a collider is UB
+void wuzy_hl_mesh_destroy(wuzy_hl_mesh_id mesh);
 
-wuzy_collider_handle wuzy_collision_system_collider_create_convex_polyhedron(
-    wuzy_collision_system* system, wuzy_vec3* vertices, size_t num_vertices,
-    wuzy_face_indices* face_indices, size_t num_faces);
+wuzy_hl_collider_id wuzy_hl_collider_create_sphere(float radius);
+wuzy_hl_collider_id wuzy_hl_collider_create_convex_polyhedron(wuzy_hl_convex_polyhedron_id convex);
 
-wuzy_collider_handle wuzy_collision_system_collider_create_mesh(wuzy_collision_system* system,
-    wuzy_vec3* vertices, size_t num_vertices, wuzy_face_indices* face_indices, size_t num_faces);
+// Mesh colliders do not take into account the transform
+wuzy_hl_collider_id wuzy_hl_collider_create_mesh(wuzy_hl_mesh_id mesh);
 
-bool wuzy_collision_system_collider_set_userdata(
-    wuzy_collision_system* system, wuzy_collider_handle collider, void* userdata);
-void* wuzy_collision_system_collider_get_userdata(
-    wuzy_collision_system* system, wuzy_collider_handle collider);
+void wuzy_hl_collider_destroy(wuzy_hl_collider_id collider);
 
-bool wuzy_collision_system_collider_set_bitmask(
-    wuzy_collision_system* system, wuzy_collider_handle collider, uint64_t bitmask);
-uint64_t wuzy_collision_system_collider_get_bitmask(
-    wuzy_collision_system* system, wuzy_collider_handle collider);
+void wuzy_hl_collider_set_userdata(wuzy_hl_collider_id collider, void* userdata);
+void* wuzy_hl_collider_get_userdata(wuzy_hl_collider_id collider);
 
-bool wuzy_collision_system_collider_set_transform(
-    wuzy_collision_system* system, wuzy_collider_handle collider, const wuzy_mat4* transform);
+void wuzy_hl_collider_set_bitmask(wuzy_hl_collider_id collider, uint64_t bitmask);
+uint64_t wuzy_hl_collider_get_bitmask(wuzy_hl_collider_id collider);
 
-wuzy_aabb wuzy_collision_system_collider_get_aabb(
-    wuzy_collision_system* system, wuzy_collider_handle collider);
+// This function will not work for mesh colliders!
+// The matrix is column-major.
+void wuzy_hl_collider_set_transform(wuzy_hl_collider_id collider, const float matrix[16]);
 
-wuzy_aabb wuzy_collision_system_collider_ray_cast(wuzy_collision_system* system,
-    wuzy_collider_handle collider, wuzy_vec3 start, wuzy_vec3 direction,
-    wuzy_ray_cast_result* result);
+void wuzy_hl_collider_get_aabb(wuzy_hl_collider_id collider, float min[3], float max[3]);
 
-bool wuzy_collision_system_collider_remove(
-    wuzy_collision_system* system, wuzy_collider_handle collider);
+size_t wuzy_hl_query_point(const float point[3], uint64_t bitmask, wuzy_hl_collider_id* colliders,
+    size_t max_num_colliders);
 
-bool wuzy_collision_system_get_collision(wuzy_collision_system* system, wuzy_collider_handle a,
-    wuzy_collider_handle b, wuzy_collision_result* result);
-
-typedef struct wuzy_collision_system_query wuzy_collision_system_query;
-
-// Queries provide an iterator interface, where you `_begin` a query and then call `_next` on it
-// repeatedly until it returns 0. The begin functions return a query from a pre-allocated pool,
-// which requires that queries can be marked as free to use again. You should do this using the
-// `_end` function, but when `_next` returned zero, the query is automatically marked as ended and
-// you don't need to call `_end`.
-// If you attempt to begin a query and no finished query is available in the pool, the function will
-// return null.
-
-wuzy_collision_system_query* wuzy_collision_system_query_point_begin(
-    wuzy_collision_system* system, wuzy_vec3 point, uint64_t bitmask);
-
-wuzy_collision_system_query* wuzy_collision_system_query_aabb_begin(
-    wuzy_collision_system* system, const wuzy_aabb* aabb, uint64_t bitmask);
+size_t wuzy_hl_query_aabb(const float min[3], const float max[3], uint64_t bitmask,
+    wuzy_hl_collider_id* colliders, size_t max_num_colliders);
 
 // This is a convenience function that essentially starts an aabb query with the aabb of a collider.
-wuzy_collision_system_query* wuzy_collision_system_query_candidates_begin(
-    wuzy_collision_system* system, wuzy_collider_handle collider);
+size_t wuzy_hl_query_candidates(wuzy_hl_collider_id collider, uint64_t bitmask,
+    wuzy_hl_collider_id* colliders, size_t max_num_colliders);
 
-size_t wuzy_collision_system_query_next(
-    wuzy_collision_system_query* query, wuzy_collider_handle* colliders, size_t max_colliders);
+// For convex colliders this will return 0 or 1 collisions. If one collider is a mesh collider,
+// the returned collisions can be arbitrarily many.
+// The returned collisions are sorted descending by depth.
+// Either a or b must be a convex collider.
+size_t wuzy_hl_get_collisions(wuzy_hl_collider_id a, wuzy_hl_collider_id b,
+    wuzy_collision_result* results, size_t max_num_results);
 
-void wuzy_collision_system_query_end(wuzy_collision_system_query* query);
+typedef struct {
+    wuzy_hl_collider_id collider;
+    wuzy_collision_result res;
+} wuzy_hl_collision;
 
-// Since ray casts only return a single result, this function does begin, next and end in a single
-// call.
-bool wuzy_collision_system_query_ray_cast(wuzy_collision_system* system, wuzy_vec3 start,
-    wuzy_vec3 direction, uint64_t bitmask, wuzy_collider_handle* collider,
-    wuzy_ray_cast_result* result);
+// This is a wrapper around wuzy_hl_query_candidates_begin and wuzy_hl_collider_get_collisions
+// and returns collisions with collider and all other colliders.
+// collider must be convex.
+size_t wuzy_hl_get_all_collisions(
+    wuzy_hl_collider_id collider, wuzy_hl_collision* collisions, size_t max_num_collisions);
 
-// These give you access to some of the underlying low-level API objects, for whatever you might
-// need to do with them.
-wuzy_aabb_tree* wuzy_collision_system_get_broadphase(wuzy_collision_system* system);
-wuzy_collider* wuzy_collision_system_get_collider(
-    wuzy_collision_system* system, wuzy_collider_handle collider);
-wuzy_aabb_tree* wuzy_collision_system_get_aabb_tree(
-    wuzy_collision_system* system, wuzy_collider_handle collider);
-wuzy_aabb_tree_node_query* wuzy_collision_system_get_query(wuzy_collision_system_query* query);
+typedef struct {
+    wuzy_hl_collider_id collider;
+    uint32_t face_index; // unset for non-mesh colliders
+    wuzy_ray_cast_result hit;
+} wuzy_hl_ray_cast_result;
+
+// dir need not be normalized; hit is at start + t*dir with t >= 0, t is not limited.
+// Only hits front faces. The results are sorted ascending by t.
+// For convex colliders this will return 0 or 1 hits. If the collider is a mesh collider, the number
+// of results can be in [0, max_num_results].
+size_t wuzy_hl_collider_ray_cast(wuzy_hl_collider_id collider, const float start[3],
+    const float dir[3], wuzy_hl_ray_cast_result* results, size_t max_num_results);
+
+size_t wuzy_hl_ray_cast(const float start[3], const float dir[3], uint64_t bitmask,
+    wuzy_hl_ray_cast_result* results, size_t max_num_results);
+
+// These give you access to some of the underlying low-level API objects, in case you need them.
+// Mutating objects returned by the following functions may break invariants of the high-level API,
+// so your usage of them might break at any time.
+wuzy_aabb_tree* wuzy_hl_get_aabb_tree();
+wuzy_collider* wuzy_hl_get_collider(wuzy_hl_collider_id collider);
+wuzy_aabb_tree* wuzy_hl_mesh_get_aabb_tree(wuzy_hl_mesh_id mesh);
 
 #ifdef __cplusplus
 }
