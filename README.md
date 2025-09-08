@@ -32,10 +32,11 @@ I plan to add a high-level API which should should reduce the API surface to the
 
 ## Usage Notes
 
-If you need collisions with meshes, like levels, just create a separate collider for each triangle of the mesh. For static level geometry I would advised to create a separate AABB Tree.
+If you need collisions with meshes, create an AABB tree with triangles.
 
-# TODO:
+# TODO
 
+- Update the examples to new features (AABB tree with triangles in wuzy-level).
 - `wuzy_aabb_tree_update_node` with flags (rebuild subtree, rotate, re-insert)
 - Fast effective bvh updates for animated scenes
 - AABB Tree Rebalancing, bulk-insert of nodes that balances tree (for levels): https://box2d.org/files/ErinCatto_DynamicBVH_Full.pdf
