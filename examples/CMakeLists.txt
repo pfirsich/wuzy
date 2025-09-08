@@ -11,3 +11,6 @@ target_link_libraries(wuzy-gjk-debug wuzy glwx fmt::fmt)
 
 add_executable(wuzy-level "wuzy-level.cpp")
 target_link_libraries(wuzy-level wuzy glwx fmt::fmt)
+
+add_executable(wuzy-level-hl "wuzy-level-hl.cpp")
+target_link_libraries(wuzy-level-hl wuzy-hl glwx fmt::fmt)
