@@ -49,6 +49,11 @@ typedef struct {
     float t;
 } wuzy_ray_cast_result;
 
+// dir need not be normalized (for any ray cast function).
+// hit is at start + t*dir with t >= 0, t is not limited
+bool wuzy_aabb_ray_cast(const float min[3], const float max[3], const float start[3],
+    const float dir[3], wuzy_ray_cast_result* res);
+
 typedef struct {
     // Make sure to initialize these with identity matrices!
     float transform[16];

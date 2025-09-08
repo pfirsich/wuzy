@@ -295,7 +295,8 @@ Aabb combine(const Aabb& a, const Aabb& b)
 }
 
 // TODO: Check how this is used and change interface
-bool ray_cast(const Aabb& aabb, vec3_view start, vec3_view dir, wuzy_ray_cast_result* res)
+static bool ray_cast(vec3_view aabb_min, vec3_view aabb_max, vec3_view start, vec3_view dir,
+    wuzy_ray_cast_result* res)
 {
     // Real-Time Collision Detection, 5.3.3
     // This could be made much faster if we extend the ray data:
@@ -312,14 +313,14 @@ bool ray_cast(const Aabb& aabb, vec3_view start, vec3_view dir, wuzy_ray_cast_re
     for (size_t axis = 0; axis < 3; ++axis) {
         if (std::abs(dir[axis]) < FLT_EPSILON) {
             // Ray is parallel to slab. No hit if origin not within slab.
-            if (start[axis] < aabb.min[axis] || start[axis] > aabb.max[axis]) {
+            if (start[axis] < aabb_min[axis] || start[axis] > aabb_max[axis]) {
                 return false;
             }
         } else {
             // Compute intersection t value of ray with near and far plane of slab
             float normal_sign = 1.0f;
-            float t1 = (aabb.min[axis] - start[axis]) * ood[axis];
-            float t2 = (aabb.max[axis] - start[axis]) * ood[axis];
+            float t1 = (aabb_min[axis] - start[axis]) * ood[axis];
+            float t2 = (aabb_max[axis] - start[axis]) * ood[axis];
             // Make t1 be intersection with near plane t2 with far plane
             if (t1 > t2) {
                 std::swap(t1, t2);
@@ -431,6 +432,12 @@ EXPORT void wuzy_invert_trs(const float mat[16], float inv[16])
     inv_t.cols[3] = { -m[3][0], -m[3][1], -m[3][2], 1.0f };
 
     copy(inv, mul(mul(inv_s, inv_r), inv_t));
+}
+
+EXPORT bool wuzy_aabb_ray_cast(const float min[3], const float max[3], const float start[3],
+    const float dir[3], wuzy_ray_cast_result* res)
+{
+    return ray_cast(v3(min), v3(max), v3(start), v3(dir), res);
 }
 
 EXPORT void wuzy_collider_set_transform(wuzy_collider* collider, const float transform[16])
@@ -2088,7 +2095,8 @@ size_t ray_cast_generic(NodeQuery* query, const float start[3], const float dir[
             debug->bitmask_checks_passed++;
         }
 
-        const auto aabb_hit = ray_cast(node->aabb, v3(start), v3(dir), &temp_res);
+        const auto aabb_hit
+            = ray_cast(node->aabb.min, node->aabb.max, v3(start), v3(dir), &temp_res);
         if (aabb_hit && (num_results == 0 || temp_res.t < results[num_results - 1].hit.t)) {
             if (debug) {
                 debug->aabb_checks_passed++;
