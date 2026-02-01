@@ -156,6 +156,8 @@ typedef struct wuzy_epa_debug wuzy_epa_debug;
 
 // TODO: Lower-Level return for EPA
 typedef struct {
+    // The normal will point away from the second collider, i.e. you have to move the first collider
+    // in the direction of normal to resolve the collision.
     float normal[3];
     float depth;
     // TODO: contact points

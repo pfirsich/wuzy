@@ -382,7 +382,7 @@ int main()
                 if (const auto col
                     = wuzy::get_collision<glm::vec3>(player_collider, *obstacle.collider)) {
                     obstacle.collision = true;
-                    const auto mtv = -glm::vec3(col->normal[0], col->normal[1], col->normal[2])
+                    const auto mtv = glm::vec3(col->normal[0], col->normal[1], col->normal[2])
                         * col->depth * 1.0f;
                     player_trafo.move(mtv);
                     player_collider.set_transform(player_trafo.getMatrix());

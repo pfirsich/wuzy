@@ -160,7 +160,7 @@ glm::vec3 compute_mtv(std::span<wuzy_collision_result> cols)
     const auto n = glm::make_vec3(cols[0].normal);
     const auto d = cols[0].depth;
     // project mtv onto deepest collision normal
-    mtv *= -d / glm::dot(mtv, glm::normalize(n));
+    mtv *= d / glm::dot(mtv, glm::normalize(n));
     return mtv;
 }
 

@@ -1456,7 +1456,15 @@ EXPORT wuzy_collision_result wuzy_epa(const wuzy_collider* c1, const wuzy_collid
     // TODO: Project the origin into the closest face to approximate contact points
 
     wuzy_collision_result res;
-    copy(res.normal, polytope_faces[min_dist_face_idx].normal);
+    // Consider a 1D example with two spheres. The first sphere A is at the origin.
+    // A second sphere B is located in positive x direction. The Minkowsi difference is a (larger)
+    // sphere somewhere in negative x direction. As it approaches A, the Minkowski difference starts
+    // moving from the negative x direction towards the origin.
+    // Just when they touch the Minkowski difference touches the origin coming from the negative x
+    // direction. This means that the normal of the EPA polytope points towards +x and to move A out
+    // of the collision (which is how we defined the normal in wuzy_collision_result), we have to
+    // move towards -x, i.e. flip the normal.
+    copy(res.normal, mul(polytope_faces[min_dist_face_idx].normal, -1.0f));
     // Add some epsilon to make sure we resolve the collision
     res.depth = min_face_dist + 1e-4f;
     return res;
