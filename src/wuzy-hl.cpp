@@ -35,7 +35,7 @@ struct Mesh {
 struct Empty { };
 
 struct Collider {
-    enum class Type : uint8_t { Sphere, ConvexPolyhedron, Mesh };
+    enum class Type : uint8_t { Sphere, Capsule, ConvexPolyhedron, Mesh };
 
     uint32_t generation = 1;
     uint32_t next_free;
@@ -44,6 +44,7 @@ struct Collider {
     union {
         Empty empty;
         wuzy_sphere_collider_userdata sphere;
+        wuzy_capsule_collider_userdata capsule;
         wuzy_hl_mesh_id mesh;
     } collider_userdata;
 
@@ -296,6 +297,19 @@ EXPORT wuzy_hl_collider_id wuzy_hl_collider_create_sphere(float radius)
     col->type = Collider::Type::Sphere;
     col->collider_userdata.sphere = { radius };
     wuzy_sphere_collider_init(&col->collider, &col->collider_userdata.sphere);
+    wuzy_collider_get_aabb(&col->collider, col->aabb_min, col->aabb_max);
+    return common_init(col);
+}
+
+EXPORT wuzy_hl_collider_id wuzy_hl_collider_create_capsule(const float half_up[3], float radius)
+{
+    auto col = state->colliders.insert();
+    col->type = Collider::Type::Capsule;
+    col->collider_userdata.capsule = {
+        .half_up = { half_up[0], half_up[1], half_up[2], },
+        .radius = radius,
+    };
+    wuzy_capsule_collider_init(&col->collider, &col->collider_userdata.capsule);
     wuzy_collider_get_aabb(&col->collider, col->aabb_min, col->aabb_max);
     return common_init(col);
 }

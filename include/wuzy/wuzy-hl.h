@@ -48,6 +48,7 @@ wuzy_hl_mesh_id wuzy_hl_mesh_create(
 void wuzy_hl_mesh_destroy(wuzy_hl_mesh_id mesh);
 
 wuzy_hl_collider_id wuzy_hl_collider_create_sphere(float radius);
+wuzy_hl_collider_id wuzy_hl_collider_create_capsule(const float half_up[3], float radius);
 wuzy_hl_collider_id wuzy_hl_collider_create_convex_polyhedron(wuzy_hl_convex_polyhedron_id convex);
 
 // Mesh colliders do not take into account the transform
