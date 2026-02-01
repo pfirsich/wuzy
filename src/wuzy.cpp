@@ -1148,6 +1148,7 @@ void debug_iter_end(wuzy_gjk_debug* debug, wuzy_simplex3d& simplex, bool contain
 EXPORT bool wuzy_gjk(
     const wuzy_collider* c1, const wuzy_collider* c2, wuzy_simplex3d* result, wuzy_gjk_debug* debug)
 {
+    assert(result);
     // As the initial direction we choose the x-axis. We want to bias the search towards the
     // origin/point of collision, so it would make sense to use the relative vector between the
     // centers of the shapes.

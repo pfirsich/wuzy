@@ -147,8 +147,8 @@ typedef struct {
 
 typedef struct wuzy_gjk_debug wuzy_gjk_debug;
 
-// debug may be null of course. To get debug info, just pass non-null pointing to a null-ed
-// wuzy_gjk_debug.
+// result must not be NULL
+// debug may be null. To get debug info, pass a pointer to a zeroed wuzy_gjk_debug.
 bool wuzy_gjk(
     const wuzy_collider* a, const wuzy_collider* b, wuzy_simplex3d* result, wuzy_gjk_debug* debug);
 
