@@ -373,8 +373,6 @@ size_t wuzy_aabb_tree_ray_cast_tris(wuzy_aabb_tree_node_query* query, const floa
 
 typedef struct {
     float direction[3];
-    float a_support[3];
-    float b_support[3];
     float support[3];
     wuzy_simplex3d simplex;
     bool contains_origin;

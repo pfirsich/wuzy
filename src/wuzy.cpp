@@ -1112,8 +1112,7 @@ static void push_front(wuzy_simplex3d& simplex, vec3_view v)
     simplex.num_vertices++;
 }
 
-static void add_debug_iteration(wuzy_gjk_debug* debug, const wuzy_collider* c1,
-    const wuzy_collider* c2, const vec3& direction, const vec3& support)
+void debug_iter_begin(wuzy_gjk_debug* debug, const vec3& direction, const vec3& support)
 {
     if (!debug) {
         return;
@@ -1129,16 +1128,21 @@ static void add_debug_iteration(wuzy_gjk_debug* debug, const wuzy_collider* c1,
         debug->num_iterations++;
     }
 
-    const auto a_sup = collider_support(c1, direction);
-    const auto b_sup = collider_support(c2, mul(direction, -1.0f));
     debug->iterations[debug->num_iterations - 1] = {
         .direction = { direction.x, direction.y, direction.z },
-        .a_support = { a_sup.x, a_sup.y, a_sup.z },
-        .b_support = { b_sup.x, b_sup.y, b_sup.z },
         .support = { support.x, support.y, support.z },
         .simplex = {},
         .contains_origin = false,
     };
+}
+
+void debug_iter_end(wuzy_gjk_debug* debug, wuzy_simplex3d& simplex, bool contains_origin)
+{
+    if (!debug) {
+        return;
+    }
+    debug->iterations[debug->num_iterations - 1].simplex = simplex;
+    debug->iterations[debug->num_iterations - 1].contains_origin = contains_origin;
 }
 
 EXPORT bool wuzy_gjk(
@@ -1159,25 +1163,22 @@ EXPORT bool wuzy_gjk(
     copy(simplex.vertices[0], a0);
     simplex.num_vertices = 1;
 
-    add_debug_iteration(debug, c1, c2, direction, a0);
-    if (debug) {
-        debug->iterations[debug->num_iterations - 1].simplex = simplex;
-    }
+    debug_iter_begin(debug, direction, a0);
+    debug_iter_end(debug, simplex, false);
 
     // Choose dir towards the origin: a0 -> O = O - a0 = -a0.
     direction = mul(a0, -1.0f);
 
+    const auto max_iterations = debug && debug->max_num_iterations ? debug->max_num_iterations : 64;
     size_t num_iterations = 0;
-    const auto debug_max_iterations
-        = debug && debug->max_num_iterations ? debug->max_num_iterations : 64;
-    while (num_iterations++ < debug_max_iterations) {
+    while (num_iterations++ < max_iterations) {
         // direction doesn't have to be normalized, but it can't be a null-vector
         assert(length(direction) > FLT_EPSILON);
         assert(is_finite(direction));
         const auto a = support(c1, c2, direction);
         assert(is_finite(a));
 
-        add_debug_iteration(debug, c1, c2, direction, a);
+        debug_iter_begin(debug, direction, a);
 
         if (dot(a, direction) < 0.0f) {
             // No Intersection:
@@ -1194,10 +1195,7 @@ EXPORT bool wuzy_gjk(
             assert(is_finite(v3(res.simplex.vertices[i])));
         }
 
-        if (debug) {
-            debug->iterations[debug->num_iterations - 1].simplex = res.simplex;
-            debug->iterations[debug->num_iterations - 1].contains_origin = res.contains_origin;
-        }
+        debug_iter_end(debug, res.simplex, res.contains_origin);
 
         if (res.contains_origin) {
             return true;

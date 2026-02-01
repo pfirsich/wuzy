@@ -17,11 +17,16 @@ std::string str(const float v[3])
     return fmt::format("{{{}, {}, {}}}", v[0], v[1], v[2]);
 }
 
-void print(const wuzy_gjk_debug_iteration& it)
+glm::vec3 make_vec3(const float v[3])
+{
+    return { v[0], v[1], v[2] };
+}
+
+void print(const wuzy_gjk_debug_iteration& it, wuzy::Collider& a, wuzy::Collider& b)
 {
     fmt::print("direction: {}\n", str(it.direction));
-    fmt::print("a_support: {}\n", str(it.a_support));
-    fmt::print("b_support: {}\n", str(it.b_support));
+    fmt::print("a_support: {}\n", a.support<glm::vec3>(make_vec3(it.direction)));
+    fmt::print("b_support: {}\n", b.support<glm::vec3>(-make_vec3(it.direction)));
     fmt::print("support: {}\n", str(it.support));
     fmt::print("simplex ({}): {{\n", it.simplex.num_vertices);
     for (size_t i = 0; i < it.simplex.num_vertices; ++i) {
@@ -29,11 +34,6 @@ void print(const wuzy_gjk_debug_iteration& it)
     }
     fmt::print("}}\n");
     fmt::print("contains_origin: {}\n", it.contains_origin);
-}
-
-glm::vec3 make_vec3(const float v[3])
-{
-    return { v[0], v[1], v[2] };
 }
 
 int main()
@@ -103,7 +103,7 @@ int main()
     wuzy_gjk_debug gjk_debug = {};
     const auto gjk_res = wuzy::gjk(collider_a, collider_b, &gjk_debug);
     size_t debug_it = 0;
-    print(gjk_debug.iterations[debug_it]);
+    print(gjk_debug.iterations[debug_it], collider_a, collider_b);
 
     SDL_Event event;
     bool running = true;
@@ -123,14 +123,14 @@ int main()
                     if (debug_it < gjk_debug.num_iterations - 1) {
                         debug_it++;
                         fmt::print("iteration: {}\n", debug_it);
-                        print(gjk_debug.iterations[debug_it]);
+                        print(gjk_debug.iterations[debug_it], collider_a, collider_b);
                     }
                     break;
                 case SDLK_MINUS:
                     if (debug_it > 0) {
                         debug_it--;
                         fmt::print("iteration: {}\n", debug_it);
-                        print(gjk_debug.iterations[debug_it]);
+                        print(gjk_debug.iterations[debug_it], collider_a, collider_b);
                     }
                     break;
                 }
@@ -238,10 +238,12 @@ int main()
             // clang-format on
         }
 
+        const auto it_a_support = collider_a.support<glm::vec3>(make_vec3(it.direction));
+        const auto it_b_support = collider_b.support<glm::vec3>(-make_vec3(it.direction));
         debug_draw.diamond(
-            glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), make_vec3(it.a_support), 0.005f); // red
+            glm::vec4(1.0f, 0.0f, 0.0f, 1.0f), make_vec3(it_a_support), 0.005f); // red
         debug_draw.diamond(
-            glm::vec4(0.0f, 1.0f, 1.0f, 1.0f), make_vec3(it.b_support), 0.005f); // turq
+            glm::vec4(0.0f, 1.0f, 1.0f, 1.0f), make_vec3(it_b_support), 0.005f); // turq
         debug_draw.diamond(
             glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), make_vec3(it.support), 0.005f); // blue
 
