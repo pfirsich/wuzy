@@ -152,6 +152,25 @@ typedef struct wuzy_gjk_debug wuzy_gjk_debug;
 bool wuzy_gjk(
     const wuzy_collider* a, const wuzy_collider* b, wuzy_simplex3d* result, wuzy_gjk_debug* debug);
 
+// Time-of-impact collision detection using binary search with GJK.
+// A binary search/bisection only works on a sorted set, so the overlap predicate needs to be
+// monotonic, i.e. there must be no collision at t=0 and some t <= 1 above which there is a
+// collision.
+// Tests if `moving` collides with `target` as `moving` travels along `delta`.
+// Returns true if a collision was found along delta (including start and end).
+// out_t receives the time of first impact ([0, 1], 0 = start, 1 = end). It either stays unchanged
+// or will be assigned a value between 0 and 1. If there is a collision at t=0,
+// there will be a collision at out_t (which will be 0).
+// Otherwise out_t will be *just* before the shapes are touching, i.e. there should be no collision
+// at out_t.
+// max_iterations controls binary search precision.
+// There is no collision information or GJK simplex, because at TOI the penetration is not existing
+// or very small and whatever simplex GJK finds is incomplete or too bad for EPA to do something
+// sensible. If you want EPA collision info, you need to move a along delta a bit to increase
+// penetration depth.
+bool wuzy_gjk_toi(const wuzy_collider* moving, const wuzy_collider* target, const float delta[3],
+    int max_iterations, float* out_t);
+
 typedef struct wuzy_epa_debug wuzy_epa_debug;
 
 // TODO: Lower-Level return for EPA

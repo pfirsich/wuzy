@@ -192,6 +192,18 @@ std::optional<CollisionResult<Vec3>> get_collision(const Collider& a, const Coll
     }
 }
 
+template <typename Vec3>
+std::optional<float> gjk_toi(
+    const Collider& moving, const Collider& target, const Vec3& delta, int max_iterations = 12)
+{
+    float t = 0.0f;
+    if (wuzy_gjk_toi(&moving.collider, &target.collider, &delta[0], max_iterations, &t)) {
+        return t;
+    } else {
+        return std::nullopt;
+    }
+}
+
 struct AabbTree {
     enum class UpdateMode {
         Default = WUZY_AABB_TREE_UPDATE_FLAGS_DEFAULT,

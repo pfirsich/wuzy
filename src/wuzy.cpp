@@ -1145,8 +1145,8 @@ void debug_iter_end(wuzy_gjk_debug* debug, wuzy_simplex3d& simplex, bool contain
     debug->iterations[debug->num_iterations - 1].contains_origin = contains_origin;
 }
 
-EXPORT bool wuzy_gjk(
-    const wuzy_collider* c1, const wuzy_collider* c2, wuzy_simplex3d* result, wuzy_gjk_debug* debug)
+template <typename Support>
+static bool gjk(Support support, wuzy_simplex3d* result, wuzy_gjk_debug* debug)
 {
     assert(result);
     // As the initial direction we choose the x-axis. We want to bias the search towards the
@@ -1156,7 +1156,7 @@ EXPORT bool wuzy_gjk(
     // quickly.
     vec3 direction = { 1.0f, 0.0f, 0.0f };
 
-    const auto a0 = support(c1, c2, direction);
+    const auto a0 = support(direction);
 
     // If the first support point is at the origin, shapes are touching
     if (length(a0) < FLT_EPSILON) {
@@ -1185,7 +1185,7 @@ EXPORT bool wuzy_gjk(
             return true;
         }
 
-        const auto a = support(c1, c2, direction);
+        const auto a = support(direction);
         assert(is_finite(a));
 
         debug_iter_begin(debug, direction, a);
@@ -1218,6 +1218,12 @@ EXPORT bool wuzy_gjk(
     return false;
 }
 
+EXPORT bool wuzy_gjk(
+    const wuzy_collider* c1, const wuzy_collider* c2, wuzy_simplex3d* result, wuzy_gjk_debug* debug)
+{
+    return gjk([c1, c2](vec3_view dir) { return support(c1, c2, dir); }, result, debug);
+}
+
 EXPORT void wuzy_gjk_debug_free(wuzy_gjk_debug* debug)
 {
     deallocate(debug->alloc, debug->iterations, debug->num_iterations);
@@ -1234,6 +1240,70 @@ EXPORT bool wuzy_test_collision(
     }
     wuzy_simplex3d res = {};
     return wuzy_gjk(a, b, &res, debug);
+}
+
+static vec3 support_with_offset(
+    const wuzy_collider* a, const wuzy_collider* b, vec3_view dir, vec3_view a_offset)
+{
+    // support(A + offset, B, dir)
+    // = support(A, dir) + offset - support(B, -dir)
+    // = support(A, B, dir) + offset
+    return add(support(a, b, dir), a_offset);
+}
+
+// GJK with collider `a` offset by a translation. This lets us test intersection
+// at different positions along a path without modifying the collider's transform.
+static bool gjk_with_offset(const wuzy_collider* a, const wuzy_collider* b, vec3_view offset)
+{
+    wuzy_simplex3d simplex = {};
+    return gjk([a, b, offset](vec3_view dir) { return support_with_offset(a, b, dir, offset); },
+        &simplex, nullptr);
+}
+
+EXPORT bool wuzy_gjk_toi(const wuzy_collider* moving, const wuzy_collider* target,
+    const float delta[3], int max_iterations, float* out_t)
+{
+    const auto del = v3(delta);
+
+    // If delta is almost zero, just test static collision
+    if (length(del) < FLT_EPSILON) {
+        wuzy_simplex3d simplex = {};
+        if (wuzy_gjk(moving, target, &simplex, nullptr)) {
+            *out_t = 0.0f;
+            return true;
+        }
+        return false;
+    }
+
+    // Check if already overlapping at t=0
+    const vec3 zero_offset = { 0.0f, 0.0f, 0.0f };
+    if (gjk_with_offset(moving, target, zero_offset)) {
+        *out_t = 0.0f;
+        return true;
+    }
+
+    // Check if collision occurs at t=1
+    if (!gjk_with_offset(moving, target, del)) {
+        // No collision even at end of movement
+        return false;
+    }
+
+    // Binary search for first collision time
+    float lo = 0.0f;
+    float hi = 1.0f;
+    for (int i = 0; i < max_iterations; ++i) {
+        const float mid = (lo + hi) * 0.5f;
+        const auto offset = mul(del, mid);
+        if (gjk_with_offset(moving, target, offset)) {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+
+    *out_t = hi;
+
+    return true;
 }
 
 struct EpaTriangle {
