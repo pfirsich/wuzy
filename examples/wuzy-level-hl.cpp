@@ -312,7 +312,6 @@ int main()
     glwx::Transform camera_trafo;
     camera_trafo.setPosition(glm::vec3(0.0f, 10.0f, 5.0f));
     camera_trafo.lookAt(glm::vec3(0.0f));
-    SDL_SetRelativeMouseMode(SDL_TRUE);
 
     const auto aspect = static_cast<float>(window.getSize().x) / window.getSize().y;
     glm::mat4 projection_matrix = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
@@ -331,6 +330,22 @@ int main()
     while (running) {
         while (SDL_PollEvent(&event) != 0) {
             switch (event.type) {
+            // On Wayland you cannot simply SDL_SetRelativeMouseMode(SDL_TRUE).
+            // Compositors may only allow mouse grab in certain conditions.
+            // Grabbing the mouse in response to a click usually works.
+            // (Can't wait to learn when it doesn't).
+            case SDL_MOUSEBUTTONDOWN: {
+                SDL_SetWindowMouseGrab(window.getSdlWindow(), SDL_TRUE);
+                SDL_SetRelativeMouseMode(SDL_TRUE);
+                break;
+            }
+            case SDL_WINDOWEVENT:
+                switch (event.window.event) {
+                case SDL_WINDOWEVENT_FOCUS_LOST:
+                    SDL_SetWindowMouseGrab(window.getSdlWindow(), SDL_FALSE);
+                    SDL_SetRelativeMouseMode(SDL_FALSE);
+                }
+                break;
             case SDL_QUIT:
                 running = false;
                 break;
