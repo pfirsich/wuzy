@@ -380,10 +380,13 @@ int main()
 
     glwx::Transform player_trafo;
     glm::vec3 player_velocity = glm::vec3(0.0f);
-    const auto player_radius = 0.5f;
+    const auto player_radius = 0.35f;
+    const auto player_height = 0.25f;
+    auto player_mesh
+        = glwx::makeCapsuleMesh(vfmt, { 0, 1, 2 }, player_radius, player_height / 2.0f, 32, 16, 1);
+    wuzy::CapsuleCollider player_collider(
+        glm::vec3 { 0.0f, 1.0f, 0.0f } * player_height / 2.0f, player_radius);
     bool last_jump = false;
-    auto sphere_mesh = glwx::makeSphereMesh(vfmt, { 0, 1, 2 }, player_radius, 32, 32);
-    wuzy::SphereCollider player_collider(player_radius);
     // We don't need to insert the player into the broadphase
 
     float camera_pitch = 0.0f, camera_yaw = 0.0f;
@@ -471,7 +474,7 @@ int main()
         draw_mesh(level, glm::vec4(0.8f), texture, {}, view_matrix, projection_matrix);
 
         draw_mesh(
-            sphere_mesh, glm::vec4(1.0f), texture, player_trafo, view_matrix, projection_matrix);
+            player_mesh, glm::vec4(1.0f), texture, player_trafo, view_matrix, projection_matrix);
 
         if (broadphase_debug) {
             draw_broadphase_debug(broadphase, debug_draw);
