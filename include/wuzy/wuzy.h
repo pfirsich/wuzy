@@ -169,7 +169,7 @@ bool wuzy_gjk(
 // sensible. If you want EPA collision info, you need to move a along delta a bit to increase
 // penetration depth.
 bool wuzy_gjk_toi(const wuzy_collider* moving, const wuzy_collider* target, const float delta[3],
-    int max_iterations, float* out_t);
+    size_t max_iterations, float* out_t);
 
 typedef struct wuzy_epa_debug wuzy_epa_debug;
 

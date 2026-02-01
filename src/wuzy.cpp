@@ -1261,7 +1261,7 @@ static bool gjk_with_offset(const wuzy_collider* a, const wuzy_collider* b, vec3
 }
 
 EXPORT bool wuzy_gjk_toi(const wuzy_collider* moving, const wuzy_collider* target,
-    const float delta[3], int max_iterations, float* out_t)
+    const float delta[3], size_t max_iterations, float* out_t)
 {
     const auto del = v3(delta);
 
@@ -1291,7 +1291,7 @@ EXPORT bool wuzy_gjk_toi(const wuzy_collider* moving, const wuzy_collider* targe
     // Binary search for first collision time
     float lo = 0.0f;
     float hi = 1.0f;
-    for (int i = 0; i < max_iterations; ++i) {
+    for (size_t i = 0; i < max_iterations; ++i) {
         const float mid = (lo + hi) * 0.5f;
         const auto offset = mul(del, mid);
         if (gjk_with_offset(moving, target, offset)) {
