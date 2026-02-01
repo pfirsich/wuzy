@@ -137,8 +137,8 @@ typedef struct {
 
 void wuzy_capsule_collider_init(wuzy_collider* collider, wuzy_capsule_collider_userdata* userdata);
 void wuzy_capsule_collider_support(const void* userdata, const float dir[3], float sup[3]);
-bool wuzy_capsule_collider_ray_cast(const void* userdata, const float start[3], 
-    const float dir[3], wuzy_ray_cast_result* result);
+bool wuzy_capsule_collider_ray_cast(
+    const void* userdata, const float start[3], const float dir[3], wuzy_ray_cast_result* result);
 
 typedef struct {
     float vertices[4][3];
