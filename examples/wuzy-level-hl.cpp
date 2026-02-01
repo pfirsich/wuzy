@@ -327,6 +327,8 @@ int main()
     SDL_Event event;
     bool running = true;
     float time = glwx::getTime();
+    float accum = 0.0f;
+    static constexpr auto sim_step_dt = 1 / 60.0f;
     while (running) {
         while (SDL_PollEvent(&event) != 0) {
             switch (event.type) {
@@ -378,24 +380,31 @@ int main()
         SDL_GetRelativeMouseState(&mouse_rel_x, &mouse_rel_y);
         const auto sensitivity = 0.002f;
         const auto look = glm::vec2(mouse_rel_x, mouse_rel_y) * sensitivity;
+        camera_trafo.setOrientation(camera_look(camera_pitch, camera_yaw, look));
 
-        const auto kb_state = SDL_GetKeyboardState(nullptr);
-        const auto move_x = kb_state[SDL_SCANCODE_D] - kb_state[SDL_SCANCODE_A];
-        const auto move_y = kb_state[SDL_SCANCODE_R] - kb_state[SDL_SCANCODE_F];
-        const auto move_z = kb_state[SDL_SCANCODE_S] - kb_state[SDL_SCANCODE_W];
-        const auto jump = kb_state[SDL_SCANCODE_SPACE] && !last_jump;
-        last_jump = kb_state[SDL_SCANCODE_SPACE];
-        const auto move_vec = glm::vec3(move_x, move_y, move_z);
-        const auto move = glm::length(move_vec) > 0.0f ? glm::normalize(move_vec) : glm::vec3(0.0f);
+        accum += dt;
+        if (accum > sim_step_dt) {
+            accum -= sim_step_dt;
 
-        if (input_mode == InputMode::Fps) {
-            player_trafo.setOrientation(camera_look(camera_pitch, camera_yaw, look));
-            move_player(player_collider, player_trafo, player_velocity, move, jump, dt);
-            camera_trafo = player_trafo;
-        }
-        if (input_mode == InputMode::Camera) {
-            camera_trafo.setOrientation(camera_look(camera_pitch, camera_yaw, look));
-            camera_trafo.moveLocal(move * dt * 3.0f);
+            const auto kb_state = SDL_GetKeyboardState(nullptr);
+            const auto move_x = kb_state[SDL_SCANCODE_D] - kb_state[SDL_SCANCODE_A];
+            const auto move_y = kb_state[SDL_SCANCODE_R] - kb_state[SDL_SCANCODE_F];
+            const auto move_z = kb_state[SDL_SCANCODE_S] - kb_state[SDL_SCANCODE_W];
+            const auto jump = kb_state[SDL_SCANCODE_SPACE] && !last_jump;
+            last_jump = kb_state[SDL_SCANCODE_SPACE];
+            const auto move_vec = glm::angleAxis(camera_yaw, glm::vec3(0.0f, 1.0f, 0.0f))
+                * glm::vec3(move_x, move_y, move_z);
+            const auto move
+                = glm::length(move_vec) > 0.0f ? glm::normalize(move_vec) : glm::vec3(0.0f);
+
+            if (input_mode == InputMode::Fps) {
+                move_player(
+                    player_collider, player_trafo, player_velocity, move, jump, sim_step_dt);
+                camera_trafo.setPosition(player_trafo.getPosition());
+            }
+            if (input_mode == InputMode::Camera) {
+                camera_trafo.moveLocal(move * sim_step_dt * 3.0f);
+            }
         }
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
