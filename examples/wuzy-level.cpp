@@ -1,3 +1,4 @@
+#include <array>
 #include <chrono>
 #include <span>
 
@@ -150,7 +151,130 @@ std::vector<wuzy::TriangleCollider> get_colliders(const tinyobj::ObjReader& read
     return colliders;
 }
 
-bool move_player(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query,
+struct SlideCollisionResult {
+    wuzy::Collider* collider;
+    float t;
+};
+
+SlideCollisionResult get_first_hit(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query,
+    wuzy::Collider& collider, const glm::vec3& velocity)
+{
+    // Compute swept AABB for broad phase query
+    const auto [aabb_min, aabb_max] = collider.get_aabb<glm::vec3>();
+    const auto swept_min = glm::min(aabb_min, aabb_min + velocity);
+    const auto swept_max = glm::max(aabb_max, aabb_max + velocity);
+
+    bp_query.begin(swept_min, swept_max, 0, nullptr);
+    const auto candidates = bp_query.all();
+
+    SlideCollisionResult cres = { nullptr, 1.0f };
+    for (const auto& res : candidates) {
+        const auto other_collider = broadphase.get_collider(res.node);
+        if (other_collider == &collider) {
+            continue;
+        }
+
+        if (const auto toi = wuzy::gjk_toi<glm::vec3>(collider, *other_collider, velocity)) {
+            if (*toi < cres.t) {
+                cres.collider = other_collider;
+                cres.t = *toi;
+            }
+        }
+    }
+    return cres;
+}
+
+glm::vec3 get_hit_normal(wuzy::Collider& collider, glwx::Transform& trafo,
+    const glm::vec3& velocity, const SlideCollisionResult& cres)
+{
+    if (cres.t == 0.0f) {
+        const auto col = wuzy::get_collision<glm::vec3>(collider, *cres.collider);
+        assert(col);
+        const auto mtv = col->normal * (col->depth + 1e-4f);
+        trafo.move(mtv);
+        collider.set_transform(trafo.getMatrix());
+        return col->normal;
+    }
+    const auto start_matrix = trafo.getMatrix();
+    // Slightly increase penetration so GJK an build a good simplex and EPA is happy.
+    // Actually we would have to translate by the hit normal here to increase penetration depth, but
+    // you might have noticed the name of this function - we don't have it yet!
+    const auto deep_t = cres.t + 1e-2f; // std::max(1e-3f, 1e-4f / glm::length(velocity));
+    trafo.move(velocity * deep_t);
+    collider.set_transform(trafo.getMatrix());
+    const auto col = wuzy::get_collision<glm::vec3>(collider, *cres.collider);
+    trafo.setMatrix(start_matrix);
+    collider.set_transform(trafo.getMatrix());
+    assert(col);
+    return col->normal;
+}
+
+void move_and_slide(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query,
+    wuzy::Collider& collider, glwx::Transform& trafo, glm::vec3& velocity)
+{
+    static constexpr auto skin = 1e-4f;
+
+    collider.set_transform(trafo.getMatrix()); // insurance
+
+    // This contains the collision normals. We constrain the remaining
+    // velocity to the plane of the first collider, then the crease/axis of the first and second
+    // collider and after the first hit, there the velocity is set to zero.
+    std::array<glm::vec3, 3> manifold;
+    size_t manifold_size = 0;
+
+    for (int slide = 0; slide < 3; ++slide) {
+        const float vel_len = glm::length(velocity);
+        if (vel_len < 1e-6f) {
+            break;
+        }
+
+        const auto first_hit = get_first_hit(broadphase, bp_query, collider, velocity);
+
+        if (!first_hit.collider) {
+            // No collision - move full distance
+            trafo.move(velocity);
+            collider.set_transform(trafo.getMatrix());
+            break;
+        }
+
+
+        const auto hit_normal = get_hit_normal(collider, trafo, velocity, first_hit);
+
+        // Move to just before collision point
+        const auto safe_t = std::max(0.0f, first_hit.t - skin / vel_len);
+        trafo.move(velocity * safe_t);
+        collider.set_transform(trafo.getMatrix());
+
+        // You have to do this little dance, because if you just did
+        // `vel = remaining - dot(remaining, normal) * normal` in a loop, you could introduce
+        // velocities along an already handled normal. v1 = v - dot(v, n1) * n1 => dot(v1, n1) = 0
+        // v2 = v1 - dot(v1, n2) * n2 => dot(v2, n1) = ~dot(n1, n2)
+        // v2 could be along n1 again, if n1 and n2 are not perpendicular.
+
+        const auto remaining_vel = velocity * (1.0f - safe_t);
+        if (manifold_size == 0) {
+            // Compute remaining velocity and project onto surface (slide)
+            velocity = remaining_vel - glm::dot(remaining_vel, hit_normal) * hit_normal;
+        } else if (manifold_size == 1) {
+            const auto crease = glm::cross(manifold[0], hit_normal);
+            if (glm::length2(crease) > 1e-6f) {
+                const auto crease_dir = glm::normalize(crease);
+                velocity = glm::dot(remaining_vel, crease_dir) * crease_dir;
+            } else {
+                // normals are nearly parallel, nothing left to do (velocity already constrained
+                // along n1)
+            }
+
+        } else if (manifold_size == 2) {
+            velocity = glm::vec3(0.0f);
+        }
+        manifold[manifold_size++] = hit_normal;
+    }
+
+    return;
+}
+
+void move_player(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query,
     wuzy::Collider& collider, glwx::Transform& trafo, glm::vec3& velocity, const glm::vec3& move,
     bool jump, float dt)
 {
@@ -204,36 +328,8 @@ bool move_player(wuzy::AabbTree& broadphase, wuzy::AabbTree::NodeQuery& bp_query
         }
     }
 
-    trafo.move(velocity * dt);
-    collider.set_transform(trafo.getMatrix());
-
-    // This is kind of racey, because the broadphase query depends on the transform of the
-    // player collider, which is changed in the loop.
-    // In a real game, you would do this totally differently (many possible ways)!
-    wuzy_query_debug debug = {};
-    const auto [aabb_min, aabb_max] = collider.get_aabb<glm::vec3>();
-    bp_query.begin(aabb_min, aabb_max, 0, &debug);
-    const auto candidates = bp_query.all();
-
-    bool collision = false;
-    for (auto res : candidates) {
-        const auto other_collider = broadphase.get_collider(res.node);
-        if (other_collider == &collider) {
-            continue;
-        }
-        wuzy_gjk_debug gjk_debug = {};
-        wuzy_epa_debug epa_debug = {};
-        if (const auto col
-            = wuzy::get_collision<glm::vec3>(collider, *other_collider, &gjk_debug, &epa_debug)) {
-            const auto mtv = -col->normal * col->depth * 1.0f;
-            trafo.move(mtv);
-            collider.set_transform(trafo.getMatrix());
-            collision = true;
-        }
-        wuzy_gjk_debug_free(&gjk_debug);
-        wuzy_epa_debug_free(&epa_debug);
-    }
-    return collision;
+    auto frame_velocity = velocity * dt;
+    move_and_slide(broadphase, bp_query, collider, trafo, frame_velocity);
 }
 
 glm::quat camera_look(float& pitch, float& yaw, const glm::vec2& look)
