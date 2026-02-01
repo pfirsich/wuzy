@@ -1158,7 +1158,10 @@ EXPORT bool wuzy_gjk(
 
     const auto a0 = support(c1, c2, direction);
 
-    // TODO: Handle a0 == origin
+    // If the first support point is at the origin, shapes are touching
+    if (length(a0) < FLT_EPSILON) {
+        return true;
+    }
 
     auto& simplex = *result;
     copy(simplex.vertices[0], a0);
@@ -1173,9 +1176,15 @@ EXPORT bool wuzy_gjk(
     const auto max_iterations = debug && debug->max_num_iterations ? debug->max_num_iterations : 64;
     size_t num_iterations = 0;
     while (num_iterations++ < max_iterations) {
-        // direction doesn't have to be normalized, but it can't be a null-vector
-        assert(length(direction) > FLT_EPSILON);
         assert(is_finite(direction));
+
+        // If direction degenerates, either the geometry is broken or
+        // the simplex boundary is actually very close to the origin.
+        // This could also be a false positive, but I don't know how to do this properly.
+        if (length(direction) <= FLT_EPSILON) {
+            return true;
+        }
+
         const auto a = support(c1, c2, direction);
         assert(is_finite(a));
 
