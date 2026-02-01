@@ -108,6 +108,24 @@ struct SphereCollider : public Collider {
     }
 };
 
+struct CapsuleCollider : public Collider {
+    wuzy_capsule_collider_userdata userdata;
+
+    template <typename Vec3>
+    CapsuleCollider(const Vec3& half_up, float radius)
+    {
+        std::memcpy(userdata.half_up, &half_up[0], sizeof(float) * 3);
+        userdata.radius = radius;
+        wuzy_capsule_collider_init(&collider, &userdata);
+    }
+
+    CapsuleCollider(const CapsuleCollider& other) : userdata(other.userdata)
+    {
+        collider = other.collider;
+        collider.userdata = &userdata;
+    }
+};
+
 struct ConvexPolyhedronCollider : public Collider {
     wuzy_convex_polyhedron_collider_userdata userdata;
     std::vector<float> vertices;

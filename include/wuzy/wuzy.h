@@ -65,6 +65,7 @@ typedef struct {
     void* userdata;
     // Support_func and ray_cast_func take vectors in local space and return vectors in local space.
     // So do the functions wuzy_*_collider_support_func/ray_cast.
+    // `dir` passed to support_func may not be normalized.
     void (*support_func)(const void* userdata, const float dir[3], float sup[3]);
     // Will return true if the ray hit and fill in result, otherwise just returns false
     bool (*ray_cast_func)(const void* userdata, const float start[3], const float dir[3],
@@ -129,7 +130,15 @@ void wuzy_convex_polyhedron_collider_support(
 bool wuzy_convex_polyhedron_collider_ray_cast(
     const void* userdata, const float start[3], const float dir[3], wuzy_ray_cast_result* result);
 
-// TODO: Capsule!
+typedef struct {
+    float half_up[3]; // encodes up and half length
+    float radius;
+} wuzy_capsule_collider_userdata;
+
+void wuzy_capsule_collider_init(wuzy_collider* collider, wuzy_capsule_collider_userdata* userdata);
+void wuzy_capsule_collider_support(const void* userdata, const float dir[3], float sup[3]);
+bool wuzy_capsule_collider_ray_cast(const void* userdata, const float start[3], 
+    const float dir[3], wuzy_ray_cast_result* result);
 
 typedef struct {
     float vertices[4][3];

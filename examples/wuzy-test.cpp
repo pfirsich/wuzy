@@ -230,7 +230,7 @@ int main()
             tri_tex_coords, tri_normals, tri_indices);
 
     struct Obstacle {
-        enum class Type { Box, Sphere, Triangle };
+        enum class Type { Box, Sphere, Triangle, Capsule };
 
         glwx::Transform trafo;
         std::unique_ptr<wuzy::Collider> collider; // need stable pointers for broadphase
@@ -245,10 +245,11 @@ int main()
     auto randf_range = [randf, lerp](float min, float max) { return lerp(randf(), min, max); };
     srand(42);
 
-    constexpr std::array<Obstacle::Type, 3> obstacle_types {
+    constexpr std::array<Obstacle::Type, 4> obstacle_types {
         Obstacle::Type::Box,
         Obstacle::Type::Sphere,
         Obstacle::Type::Triangle,
+        Obstacle::Type::Capsule,
     };
 
     std::vector<Obstacle> obstacles;
@@ -273,6 +274,9 @@ int main()
         } else if (type == Obstacle::Type::Triangle) {
             collider = std::make_unique<wuzy::TriangleCollider>(
                 tri_verts[0], tri_verts[1], tri_verts[2]);
+        } else if (type == Obstacle::Type::Capsule) {
+            collider = std::make_unique<wuzy::CapsuleCollider>(
+                glm::vec3(0.0f, half_box_size, 0.0f), half_box_size * 0.5f);
         }
         collider->set_transform(trafo.getMatrix());
         const auto bp_node = broadphase.insert(*collider);
@@ -280,6 +284,12 @@ int main()
         obstacle_idx_map.emplace(bp_node.id, i);
     }
     broadphase.rebuild();
+
+    // Capsule mesh params should match the collider: half_up=(0, half_box_size, 0), radius=half_box_size*0.5
+    const auto capsule_half_length = half_box_size;
+    const auto capsule_radius = half_box_size * 0.5f;
+    auto capsule_mesh = glwx::makeCapsuleMesh(
+        vert_fmt, { 0, 1, 2 }, capsule_radius, capsule_half_length, 16, 16, 1);
 
     glwx::Transform player_trafo;
     bool player_collision = false;
@@ -414,6 +424,9 @@ int main()
             } else if (obstacle.type == Obstacle::Type::Triangle) {
                 draw_mesh(
                     triangle_mesh, color, texture, obstacle.trafo, view_matrix, projection_matrix);
+            } else if (obstacle.type == Obstacle::Type::Capsule) {
+                draw_mesh(
+                    capsule_mesh, color, texture, obstacle.trafo, view_matrix, projection_matrix);
             }
         }
 

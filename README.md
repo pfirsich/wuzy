@@ -41,7 +41,6 @@ If you need collisions with meshes, create an AABB tree with triangles.
 - Fast effective bvh updates for animated scenes
 - AABB Tree Rebalancing, bulk-insert of nodes that balances tree (for levels): https://box2d.org/files/ErinCatto_DynamicBVH_Full.pdf
 - Tests!
-- Capsule Shapes - The support function is easy, but ray casting is not.
 - Some support for continuous collision detection - I really just need support for sweeping shapes to the support functions (somehow). The swept shapes are convex again (for linear movement at least), so there has to be a way. If you really need this and this hasn't been implemented yet, just do some raycasts and then multisample.
   - https://box2d.org/files/ErinCatto_ContinuousCollision_GDC2013.pdf
   - https://www.youtube.com/watch?v=7_nKOET6zwI

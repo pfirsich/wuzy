@@ -404,6 +404,8 @@ EXPORT void wuzy_collider_set_transform(wuzy_collider* collider, const float tra
 
 static vec3 collider_support(const wuzy_collider* collider, vec3_view dir)
 {
+    // The transform (and consequently the inverse) may have a scale component, but
+    // we do not normalize, because some support functions can deal with non-normalized directions.
     const auto local_dir = mul(m4(collider->inverse_transform), dir, 0.0f);
     vec3 local_sup;
     collider->support_func(collider->userdata, local_dir.data(), local_sup.data());
@@ -671,6 +673,139 @@ EXPORT bool wuzy_convex_polyhedron_collider_ray_cast(
     }
     result->t = tfirst;
     copy(result->hit_position, add(v3(start), mul(v3(dir), result->t)));
+    return true;
+}
+
+EXPORT void wuzy_capsule_collider_init(
+    wuzy_collider* collider, wuzy_capsule_collider_userdata* userdata)
+{
+    copy(collider->transform, identity());
+    copy(collider->inverse_transform, identity());
+    collider->userdata = userdata;
+    collider->support_func = wuzy_capsule_collider_support;
+    collider->ray_cast_func = wuzy_capsule_collider_ray_cast;
+}
+
+EXPORT void wuzy_capsule_collider_support(const void* userdata, const float dir[3], float sup[3])
+{
+    const auto& cap = *(const wuzy_capsule_collider_userdata*)userdata;
+    // swept sphere support function
+    const auto center = mul(v3(cap.half_up), dot(v3(dir), v3(cap.half_up)) > 0.0f ? 1.0f : -1.0f);
+    copy(sup, add(center, mul(normalize(v3(dir)), cap.radius)));
+}
+
+// ro should be relative to the origin of the sphere!
+static bool ray_cast_sphere(vec3_view ro, vec3_view rd, float rad, float* t)
+{
+    // |ray(t) - sphere_origin|^2 = |ro + t * rd|^2 = rad^2
+    // <=> t^2 + 2t*dot(ro, rd) + (|ro|^2 - rad^2) = 0
+    const auto b = dot(ro, rd);
+    const auto c = dot(ro, ro) - rad * rad;
+    const auto discr = b * b - c;
+    if (discr < 0.0) {
+        return false;
+    }
+    // return closer solution (smaller t)
+    *t = -b - sqrtf(discr);
+    return true;
+}
+
+// adapted from capsule intersector by iq: https://iquilezles.org/articles/intersectors/
+EXPORT bool wuzy_capsule_collider_ray_cast(
+    const void* userdata, const float start[3], const float dir[3], wuzy_ray_cast_result* result)
+{
+    const auto& cap = *(const wuzy_capsule_collider_userdata*)userdata;
+
+    const auto pa = mul(v3(cap.half_up), -1.0f); // endpoint at -half_up
+    const auto pb = make_vec3(cap.half_up); // endpoint at +half_up
+    const auto ro = v3(start); // ray origin
+
+    const auto cap_axis = sub(pb, pa);
+    const auto ro_rel = sub(ro, pa); // ray origin relative to pa
+
+    const auto cap_axis_sq = dot(cap_axis, cap_axis);
+    const auto d_cap_axis_ro_rel = dot(cap_axis, ro_rel); // origin projected on cap axis
+    const auto d_cap_axis_rd = dot(cap_axis, v3(dir)); // ray dir projected on cap axis
+
+    // First check the distance between the ray and an infinite cylinder.
+    // And find the position on the ray (ro + t*rd) where this distance is `rad`.
+    // We take the ray relative to pa, `w(t) = ray(t) - pa` and remove it's component along
+    // cap_axis, so that we are left with the component orthogonal to the cap axis.
+    // The distance squared is then:
+    // rad^2 = |w - dot(cap_axis, w) / dot(cap_axis, cap_axis) * cap_axis|^2
+    // rad^2 = |w|^2 - |dot(cap_axis, w)|^2 / |cap_axis|^2 (looks wrong? write it out)
+    // to make a quadratic eq:
+    // |cap_axis|^2 * |w|^2  - |dot(cap_axis, w)|^2 - |cap_axis|^2 * rad^2
+    // = cap_axis_sq * |w|^2 - |dot(cap_axis, w)|^2 - cap_axis_sq * rad^2 = 0
+
+    // and |w|^2 = dot(ro_rel, ro_rel) + 2t * dot(ro_rel, rd) + t^2 * |rd|^2
+
+    // and dot(cap_axis, w) = dot(cap_axis, ro_rel) + t * dot(cap_axis, rd)
+    // => |dot(cap_axis, w)|^2 = d_cap_axis_ro_rel^2
+    //                           + 2t * d_cap_axis_ro_rel * d_cap_axis_rd
+    //                           + t^2 * d_cap_axis_rd^2
+
+    // plug into quadratic eq:
+    // => cap_axis_sq * [dot(ro_rel, ro_rel) + 2t * dot(ro_rel, rd) + t^2]
+    //    - d_cap_axis_ro_rel^2
+    //      - 2t * d_cap_axis_ro_rel * d_cap_axis_rd
+    //      - t^2 * d_cap_axis_rd^2
+    //    - cap_axis_sq * rad^2
+
+    // group by powers of t:
+    // t^2 * (cap_axis_sq - d_cap_axis_rd^2)  (a)
+    // + 2t * (cap_axis_sq * dot(ro_rel, rd) - d_cap_axis_ro_rel * d_cap_axis_rd)  (b)
+    // + cap_axis_sq * dot(ro_rel, ro_rel) - d_cap_axis_ro_rel^2 - cap_axis_sq * rad^2  (c)
+
+    const auto a_cyl = cap_axis_sq - d_cap_axis_rd * d_cap_axis_rd;
+    const auto b_cyl = cap_axis_sq * dot(ro_rel, v3(dir)) - d_cap_axis_ro_rel * d_cap_axis_rd;
+    const auto c_cyl = cap_axis_sq * dot(ro_rel, ro_rel) - d_cap_axis_ro_rel * d_cap_axis_ro_rel
+        - cap_axis_sq * cap.radius * cap.radius;
+    const auto discr_cyl = b_cyl * b_cyl - a_cyl * c_cyl;
+    if (discr_cyl < 0.0) { // no solution for quadratic
+        return false;
+    }
+
+    // If rd is almost parallel to cap_axis:
+    // dot(cap_axis, rd) = |cap_axis| <=> a_cyl = 0
+    // and later we divide by a_cyl, so let's handle this case
+    if (fabs(a_cyl) < 1e-7f) {
+        // choose a cap (body is obstructed by caps)
+        // if ray origin is opposite of the cap axis, it's on the side of pa
+        const vec3 sphere_center = (d_cap_axis_ro_rel <= 0.0f) ? pa : pb;
+        if (!ray_cast_sphere(sub(ro, sphere_center), v3(dir), cap.radius, &result->t)) {
+            return false;
+        }
+        copy(result->hit_position, add(ro, mul(v3(dir), result->t)));
+        copy(result->normal, normalize(sub(v3(result->hit_position), sphere_center)));
+        return true;
+    }
+
+    // use the closer (smaller t) solution
+    result->t = (-b_cyl - sqrtf(discr_cyl)) / a_cyl;
+    // project ray hit onto capsule axis:
+    // proj_cyl = dot(cap_axis, ray(t) - pa)
+    const auto proj_cyl = d_cap_axis_ro_rel + result->t * d_cap_axis_rd;
+    // since cap_axis is not normalized, we don't check for proj_cyl in [0, 1], but
+    // proj_cyl in [0, cap_axis_sq]
+    if (proj_cyl > 0.0 && proj_cyl < cap_axis_sq) { // body
+        copy(result->hit_position, add(ro, mul(v3(dir), result->t)));
+        const auto closest = add(pa, mul(cap_axis, proj_cyl / cap_axis_sq));
+        copy(result->normal, normalize(sub(v3(result->hit_position), closest)));
+        return true;
+    }
+
+    // caps
+    // If the ray hits at proj_cyl < 0, the first possible hit is the sphere
+    // centered at pa.
+    // If ray hits at proj_cyl > cap_axis_sq, the first possible hit is the sphere
+    // centered at pb.
+    const vec3 sphere_center = (proj_cyl <= 0.0) ? pa : pb;
+    if (!ray_cast_sphere(sub(ro, sphere_center), v3(dir), cap.radius, &result->t)) {
+        return false;
+    }
+    copy(result->hit_position, add(ro, mul(v3(dir), result->t)));
+    copy(result->normal, normalize(sub(v3(result->hit_position), sphere_center)));
     return true;
 }
 
