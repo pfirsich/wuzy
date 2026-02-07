@@ -12,7 +12,6 @@
 #include <glwx/transform.hpp>
 #include <glwx/vertexaccessor.hpp>
 #include <glwx/window.hpp>
-#include <span>
 
 #include "debugdraw.hpp"
 #include "wuzy/wuzy-hl.h"
@@ -129,6 +128,9 @@ glwx::Mesh get_mesh(const tinyobj::ObjReader& reader, const glw::VertexFormat& v
     return mesh;
 }
 
+static constexpr uint64_t WORLD_MASK = 1ULL << 0;
+static constexpr uint64_t PLAYER_MASK = 1ULL << 1;
+
 void create_colliders(const tinyobj::ObjReader& reader)
 {
     std::vector<uint32_t> indices;
@@ -146,22 +148,8 @@ void create_colliders(const tinyobj::ObjReader& reader)
     }
     const auto mesh = wuzy_hl_mesh_create(
         vert_data, reader.GetAttrib().vertices.size(), indices.data(), indices.size() / 3);
-    wuzy_hl_collider_create_mesh(mesh);
-}
-
-glm::vec3 compute_mtv(std::span<wuzy_collision_result> cols)
-{
-    // first take weighted average
-    glm::vec3 mtv = { 0.0f, 0.0f, 0.0f };
-    for (const auto& col : cols) {
-        mtv += glm::make_vec3(col.normal) * col.depth;
-    }
-    // find a length that clears the largest collision
-    const auto n = glm::make_vec3(cols[0].normal);
-    const auto d = cols[0].depth;
-    // project mtv onto deepest collision normal
-    mtv *= d / glm::dot(mtv, glm::normalize(n));
-    return mtv;
+    const auto collider = wuzy_hl_collider_create_mesh(mesh);
+    wuzy_hl_collider_set_bitmask(collider, WORLD_MASK);
 }
 
 bool move_player(wuzy_hl_collider_id collider, glwx::Transform& trafo, glm::vec3& velocity,
@@ -177,9 +165,9 @@ bool move_player(wuzy_hl_collider_id collider, glwx::Transform& trafo, glm::vec3
     const auto ray_start = trafo.getPosition();
     const glm::vec3 ray_dir = { 0.0f, -1.0f, 0.0f };
     wuzy_hl_ray_cast_result rc;
-    const auto hit = wuzy_hl_ray_cast(&ray_start.x, &ray_dir.x, 0, &rc, 1);
+    const auto hit = wuzy_hl_ray_cast(&ray_start.x, &ray_dir.x, WORLD_MASK, &rc, 1);
     // kind of controls walkable slope height
-    const auto on_ground = hit && rc.hit.t < 0.71f;
+    const auto on_ground = hit && rc.hit.t < 0.71f && velocity.y <= 0.0f;
     if (on_ground) {
         if (velocity.y < 0.0f) {
             velocity.y = 0.0f;
@@ -219,32 +207,25 @@ bool move_player(wuzy_hl_collider_id collider, glwx::Transform& trafo, glm::vec3
         }
     }
 
-    trafo.move(velocity * dt);
     wuzy_hl_collider_set_transform(collider, &trafo.getMatrix()[0].x);
 
-    // This is kind of racey, because the broadphase query depends on the transform of the
-    // player collider, which is changed in the loop.
-    // In a real game, you would do this totally differently (many possible ways)!
-
-    static std::array<wuzy_hl_collider_id, 64> candidates_buf;
-
-    const auto n
-        = wuzy_hl_query_candidates(collider, 0, candidates_buf.data(), candidates_buf.size());
-    const auto candidates = std::span(candidates_buf).first(n);
-
-    bool collision = false;
-    for (const auto other : candidates) {
-        for (size_t i = 0; i < 8; ++i) {
-            static std::array<wuzy_collision_result, 4> cols;
-            const auto n = wuzy_hl_get_collisions(collider, other, cols.data(), cols.size());
-            if (n > 0) {
-                trafo.move(compute_mtv(std::span(cols).first(n)));
-                wuzy_hl_collider_set_transform(collider, &trafo.getMatrix()[0].x);
-                collision = true;
-            }
-        }
+    wuzy_hl_move_and_slide_result res = {};
+    wuzy_hl_move_and_slide(collider,
+        {
+            .delta = { velocity.x * dt, velocity.y * dt, velocity.z * dt },
+            .skin = 1e-4f,
+            .min_delta = 1e-6f,
+            .bitmask = WORLD_MASK,
+        },
+        &res);
+    trafo.move(glm::make_vec3(res.moved_delta));
+    // We would have to feed back the velocity, but walking up slopes would be really slow. Add this
+    // back, once I implemented slope handling in wuzy_hl_move_and_slide. velocity =
+    // glm::make_vec3(res.remaining_delta) / dt;
+    if (on_ground && !jump) {
+        velocity.y = 0.0f;
     }
-    return collision;
+    return res.hit;
 }
 
 glm::quat camera_look(float& pitch, float& yaw, const glm::vec2& look)
@@ -306,6 +287,7 @@ int main()
         = glwx::makeCapsuleMesh(vfmt, { 0, 1, 2 }, player_radius, player_height / 2.0f, 32, 16, 1);
     const float half_up[3] = { 0.0f, player_height / 2.0f, 0.0f };
     const auto player_collider = wuzy_hl_collider_create_capsule(half_up, player_radius);
+    wuzy_hl_collider_set_bitmask(player_collider, PLAYER_MASK);
     // We don't need to insert the player into the broadphase
 
     float camera_pitch = 0.0f, camera_yaw = 0.0f;
