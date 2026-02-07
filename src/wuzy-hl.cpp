@@ -125,6 +125,74 @@ struct State {
 
 State* state = nullptr;
 
+// I cannot decide whether these math functions should be replaced with a math lib that is shared
+// between wuzy and wuzy-hl
+
+static void vec3_copy(float dst[3], const float src[3])
+{
+    std::memcpy(dst, src, sizeof(float) * 3);
+}
+
+static void vec3_sub(const float a[3], const float b[3], float out[3])
+{
+    out[0] = a[0] - b[0];
+    out[1] = a[1] - b[1];
+    out[2] = a[2] - b[2];
+}
+
+static void vec3_scale(const float v[3], float s, float out[3])
+{
+    out[0] = v[0] * s;
+    out[1] = v[1] * s;
+    out[2] = v[2] * s;
+}
+
+static float vec3_dot(const float a[3], const float b[3])
+{
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+static void vec3_cross(const float a[3], const float b[3], float out[3])
+{
+    out[0] = a[1] * b[2] - a[2] * b[1];
+    out[1] = a[2] * b[0] - a[0] * b[2];
+    out[2] = a[0] * b[1] - a[1] * b[0];
+}
+
+static float vec3_len2(const float v[3])
+{
+    return vec3_dot(v, v);
+}
+
+static float vec3_len(const float v[3])
+{
+    return std::sqrt(vec3_len2(v));
+}
+
+static void vec3_normalize(float v[3])
+{
+    const float len = vec3_len(v);
+    if (len > 0.0f) {
+        v[0] /= len;
+        v[1] /= len;
+        v[2] /= len;
+    }
+}
+
+static void translate_matrix(float m[16], const float delta[3])
+{
+    m[12] += delta[0];
+    m[13] += delta[1];
+    m[14] += delta[2];
+}
+
+static void get_matrix_translation(const float m[16], float out[3])
+{
+    out[0] = m[12];
+    out[1] = m[13];
+    out[2] = m[14];
+}
+
 EXPORT void wuzy_hl_init(wuzy_hl_create_params params)
 {
     auto alloc = params.allocator ? params.allocator : default_allocator();
@@ -377,14 +445,19 @@ EXPORT uint64_t wuzy_hl_collider_get_bitmask(wuzy_hl_collider_id id)
     return state->colliders.get(id.id)->bitmask;
 }
 
+static void set_transform(Collider& col, const float matrix[16])
+{
+    wuzy_collider_set_transform(&col.collider, matrix);
+    wuzy_collider_get_aabb(&col.collider, col.aabb_min, col.aabb_max);
+    wuzy_aabb_tree_update(state->tree, col.node, col.bitmask, col.aabb_min, col.aabb_max,
+        WUZY_AABB_TREE_UPDATE_FLAGS_DEFAULT);
+}
+
 EXPORT void wuzy_hl_collider_set_transform(wuzy_hl_collider_id id, const float matrix[16])
 {
     auto col = state->colliders.get(id.id);
     assert(col->type != Collider::Type::Mesh);
-    wuzy_collider_set_transform(&col->collider, matrix);
-    wuzy_collider_get_aabb(&col->collider, col->aabb_min, col->aabb_max);
-    wuzy_aabb_tree_update(state->tree, col->node, col->bitmask, col->aabb_min, col->aabb_max,
-        WUZY_AABB_TREE_UPDATE_FLAGS_DEFAULT);
+    set_transform(*col, matrix);
 }
 
 EXPORT void wuzy_hl_collider_get_aabb(wuzy_hl_collider_id id, float min[3], float max[3])
@@ -484,7 +557,8 @@ static bool get_mesh_collisions_next(
     wuzy_aabb_tree_node_query_result qres;
     while (wuzy_aabb_tree_node_query_next(query, &qres, 1)) {
         assert(b->collider.userdata == nullptr);
-        b->collider.userdata = qres.node_userdata; // triangle collider userdata!
+        // We assign a triangle collider userdata here to use the transform of b
+        b->collider.userdata = qres.node_userdata;
         const auto col = wuzy_get_collision(&a->collider, &b->collider, cres, nullptr, nullptr);
         b->collider.userdata = nullptr;
         if (col) {
@@ -554,6 +628,261 @@ EXPORT size_t wuzy_hl_get_all_collisions(
         }
     }
     return num_collisions;
+}
+
+struct SweepHitInternal {
+    Collider* collider;
+    float t;
+    const wuzy_triangle_collider_userdata* tri;
+    uint32_t face_index;
+};
+
+static SweepHitInternal sweep_first_hit(
+    Collider& moving, const float delta[3], uint64_t bitmask, size_t max_iterations)
+{
+    // Use swept AABB for broadphase query
+    float aabb_min[3], aabb_max[3];
+    wuzy_collider_get_aabb(&moving.collider, aabb_min, aabb_max);
+    float swept_min[3];
+    float swept_max[3];
+    for (size_t i = 0; i < 3; ++i) {
+        swept_min[i] = std::fmin(aabb_min[i], aabb_min[i] + delta[i]);
+        swept_max[i] = std::fmax(aabb_max[i], aabb_max[i] + delta[i]);
+    }
+
+    SweepHitInternal hit = { nullptr, 1.0f, nullptr, UINT32_MAX };
+    wuzy_aabb_tree_node_query_aabb_begin(state->query, swept_min, swept_max, bitmask, nullptr);
+    wuzy_aabb_tree_node_query_result res;
+    while (wuzy_aabb_tree_node_query_next(state->query, &res, 1)) {
+        auto other = (Collider*)res.node_userdata;
+        if (other == &moving) {
+            continue;
+        }
+
+        if (other->type == Collider::Type::Mesh) {
+            const auto mesh = state->meshes.get(other->collider_userdata.mesh.id);
+            wuzy_aabb_tree_node_query_aabb_begin(mesh->query, swept_min, swept_max, 0, nullptr);
+            wuzy_aabb_tree_node_query_result qres;
+            while (wuzy_aabb_tree_node_query_next(mesh->query, &qres, 1)) {
+                const auto tri = (wuzy_triangle_collider_userdata*)qres.node_userdata;
+                // see get_mesh_collisions_next, assign tri userdata to use `other` transform
+                other->collider.userdata = (void*)tri;
+                float t = 0.0f;
+                if (wuzy_gjk_toi(&moving.collider, &other->collider, delta, max_iterations, &t)) {
+                    if (t < hit.t) {
+                        hit = { other, t, tri, (uint32_t)(tri - mesh->tris) };
+                    }
+                }
+            }
+            other->collider.userdata = nullptr;
+        } else {
+            float t = 0.0f;
+            if (wuzy_gjk_toi(&moving.collider, &other->collider, delta, max_iterations, &t)) {
+                if (t < hit.t) {
+                    hit = { other, t, nullptr, UINT32_MAX };
+                }
+            }
+        }
+    }
+
+    return hit;
+}
+
+struct GetCollisionResult {
+    wuzy_collision_result res;
+    bool has_collision;
+};
+
+static GetCollisionResult get_collision(
+    Collider& collider, Collider& other, const SweepHitInternal& hit)
+{
+    if (other.type == Collider::Type::Mesh) {
+        other.collider.userdata = (void*)hit.tri;
+    }
+    GetCollisionResult res = {};
+    res.has_collision
+        = wuzy_get_collision(&collider.collider, &other.collider, &res.res, nullptr, nullptr);
+    if (other.type == Collider::Type::Mesh) {
+        other.collider.userdata = nullptr;
+    }
+    return res;
+}
+
+static bool get_hit_normal(Collider& moving, float matrix[16], const float delta[3],
+    const SweepHitInternal& hit, float out_normal[3])
+{
+    static constexpr float skin = 1e-4f;
+    static constexpr float deep_t_eps = 1e-2f;
+
+    auto other = hit.collider;
+    assert(other);
+
+    // It's possible we have a collision at the start of the sweep.
+    // In that case we need to actually resolve an existing collision (not just avoid a new
+    // collision and estimate a hit normal.
+    if (hit.t == 0.0f) {
+        const auto col = get_collision(moving, *other, hit);
+        if (!col.has_collision) {
+            // this should never happen (lol)
+            // wuzy_gjk_toi found a collision, so wuzy_gjk should find a collision here as well.
+            return false;
+        }
+        const float mtv[3] = {
+            col.res.normal[0] * (col.res.depth + skin),
+            col.res.normal[1] * (col.res.depth + skin),
+            col.res.normal[2] * (col.res.depth + skin),
+        };
+        translate_matrix(matrix, mtv);
+        set_transform(moving, matrix);
+        vec3_copy(out_normal, col.res.normal);
+        return true;
+    }
+
+    const float start_translation[3] = { matrix[12], matrix[13], matrix[14] };
+
+    // Slightly increase penetration so GJK can build a good simplex and EPA is happy.
+    // Actually we would have to translate by the hit normal here to increase penetration depth, but
+    // you might have noticed the name of this function - we don't have it yet!
+    const float deep_t = hit.t + deep_t_eps;
+    float deep_delta[3];
+    vec3_scale(delta, deep_t, deep_delta);
+    translate_matrix(matrix, deep_delta);
+    // Just update the collider, not the broadphase (we will restore later anyways)
+    wuzy_collider_set_transform(&moving.collider, matrix);
+
+    const auto col = get_collision(moving, *other, hit);
+
+    // Restore old transform
+    std::memcpy(matrix + 12, start_translation, sizeof(float) * 3);
+    wuzy_collider_set_transform(&moving.collider, matrix);
+
+    if (!col.has_collision) {
+        // We have tried to increase the penetration along delta, so we might have actually resolved
+        // the collision (or "ran away" from it).
+        return false;
+    }
+    vec3_copy(out_normal, col.res.normal);
+    return true;
+}
+
+EXPORT void wuzy_hl_move_and_slide(wuzy_hl_collider_id moving_id,
+    wuzy_hl_move_and_slide_params params, wuzy_hl_move_and_slide_result* out)
+{
+    auto moving = state->colliders.get(moving_id.id);
+    assert(is_convex(moving));
+
+    float matrix[16];
+    std::memcpy(matrix, moving->collider.transform, sizeof(float) * 16);
+
+    float start_pos[3];
+    get_matrix_translation(matrix, start_pos);
+
+    float delta[3];
+    vec3_copy(delta, params.delta);
+
+    const auto skin = params.skin > 0.0f ? params.skin : 1e-4f;
+    const auto min_delta = params.min_delta > 0.0f ? params.min_delta : 1e-6f;
+
+    bool hit_any = false;
+    SweepHitInternal last_hit = {};
+    float last_hit_normal[3] = {};
+
+    // This contains the collision normals. We constrain the remaining
+    // velocity to the plane of the first collider, then the crease/axis of the first and second
+    // collider and after the first hit, there the velocity is set to zero.
+    float manifold[3][3];
+    size_t manifold_size = 0;
+
+    for (uint32_t slide = 0; slide < 3; ++slide) {
+        const float vel_len = vec3_len(delta);
+        if (vel_len < min_delta) {
+            break;
+        }
+
+        const auto hit = sweep_first_hit(*moving, delta, params.bitmask, 12);
+        if (!hit.collider) {
+            // no collision -> move full distance
+            translate_matrix(matrix, delta);
+            set_transform(*moving, matrix);
+            delta[0] = 0.0f;
+            delta[1] = 0.0f;
+            delta[2] = 0.0f;
+            break;
+        }
+
+        float hit_normal[3];
+        if (!get_hit_normal(*moving, matrix, delta, hit, hit_normal)) {
+            // See get_hit_normal. This was likely a very shallow or grazing collision, so we just
+            // pretend there was none! Can't wait to regret this later :)
+            translate_matrix(matrix, delta);
+            set_transform(*moving, matrix);
+            delta[0] = 0.0f;
+            delta[1] = 0.0f;
+            delta[2] = 0.0f;
+            break;
+        }
+
+        hit_any = true;
+        last_hit = hit;
+        vec3_copy(last_hit_normal, hit_normal);
+
+        // Move to just before the collision
+        const float safe_t = std::fmax(0.0f, hit.t - skin / vel_len);
+        float step_delta[3];
+        vec3_scale(delta, safe_t, step_delta);
+        translate_matrix(matrix, step_delta);
+        set_transform(*moving, matrix);
+
+        float remaining[3];
+        vec3_scale(delta, 1.0f - safe_t, remaining);
+
+        // You have to do this little dance, because if you just did
+        // `vel = remaining - dot(remaining, normal) * normal` in a loop, you could introduce
+        // velocities along an already handled normal. v1 = v - dot(v, n1) * n1 => dot(v1, n1) = 0
+        // v2 = v1 - dot(v1, n2) * n2 => dot(v2, n1) = ~dot(n1, n2)
+        // v2 could be along n1 again, if n1 and n2 are not perpendicular.
+
+        if (manifold_size == 0) {
+            // Compute remaining delta and project onto surface (slide)
+            float proj[3];
+            vec3_scale(hit_normal, vec3_dot(remaining, hit_normal), proj);
+            vec3_sub(remaining, proj, delta);
+        } else if (manifold_size == 1) {
+            // We are in a crease (two planes crossing)
+            float crease[3];
+            vec3_cross(manifold[0], hit_normal, crease);
+            if (vec3_len2(crease) > 1e-6f) {
+                vec3_normalize(crease);
+                const float d = vec3_dot(remaining, crease);
+                vec3_scale(crease, d, delta);
+            } else {
+                // normals are nearly parallel, nothing left to do (velocity already constrained
+                // along n1)
+                vec3_copy(delta, remaining);
+            }
+        } else if (manifold_size == 2) {
+            // We are in a corner, there is no way to slide -> just stop moving
+            delta[0] = 0.0f;
+            delta[1] = 0.0f;
+            delta[2] = 0.0f;
+        }
+
+        assert(manifold_size < 3);
+        vec3_copy(manifold[manifold_size++], hit_normal);
+    }
+
+    if (out) {
+        float end_pos[3];
+        get_matrix_translation(matrix, end_pos);
+        vec3_sub(end_pos, start_pos, out->moved_delta);
+        vec3_copy(out->remaining_delta, delta);
+        out->hit = hit_any;
+        if (hit_any) {
+            vec3_copy(out->last_hit_normal, last_hit_normal);
+            out->last_hit_collider = { state->colliders.get_id(last_hit.collider) };
+            out->last_hit_face_index = last_hit.face_index;
+        }
+    }
 }
 
 template <typename T>

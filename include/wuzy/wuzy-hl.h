@@ -97,6 +97,29 @@ size_t wuzy_hl_get_all_collisions(
     wuzy_hl_collider_id collider, wuzy_hl_collision* collisions, size_t max_num_collisions);
 
 typedef struct {
+    float delta[3]; // desired move (world space)
+    float skin; // the distance to (attempt to) maintain between other colliders
+    float min_delta; // slide is terminated if movement is below this threshold
+    uint64_t bitmask; // bitmask to select other colliders
+} wuzy_hl_move_and_slide_params;
+
+typedef struct {
+    float moved_delta[3];
+    float remaining_delta[3];
+    bool hit;
+    float last_hit_normal[3];
+    wuzy_hl_collider_id last_hit_collider;
+    uint32_t last_hit_face_index;
+} wuzy_hl_move_and_slide_result;
+
+// Kinematic sweep & slide for a convex collider (`moving`).
+// Moves `moving` by up to `delta` in world space.
+// This updates the collider, so use `moved_delta`/`remaining_delta` to sync external state.
+// Pass a zero-initialized `out`.
+void wuzy_hl_move_and_slide(wuzy_hl_collider_id moving, wuzy_hl_move_and_slide_params params,
+    wuzy_hl_move_and_slide_result* out);
+
+typedef struct {
     wuzy_hl_collider_id collider;
     uint32_t face_index; // set iff mesh collider
     wuzy_ray_cast_result hit;
