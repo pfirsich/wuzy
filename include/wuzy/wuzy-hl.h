@@ -98,7 +98,7 @@ size_t wuzy_hl_get_all_collisions(
 
 typedef struct {
     wuzy_hl_collider_id collider;
-    uint32_t face_index; // unset for non-mesh colliders
+    uint32_t face_index; // set iff mesh collider
     wuzy_ray_cast_result hit;
 } wuzy_hl_ray_cast_result;
 

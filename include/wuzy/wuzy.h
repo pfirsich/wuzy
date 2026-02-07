@@ -68,6 +68,7 @@ typedef struct {
     // `dir` passed to support_func may not be normalized.
     void (*support_func)(const void* userdata, const float dir[3], float sup[3]);
     // Will return true if the ray hit and fill in result, otherwise just returns false
+    // `dir` must be normalized
     bool (*ray_cast_func)(const void* userdata, const float start[3], const float dir[3],
         wuzy_ray_cast_result* result);
 } wuzy_collider;
