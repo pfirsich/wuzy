@@ -36,7 +36,8 @@ If you need collisions with meshes, create an AABB tree with triangles.
 
 # TODO
 
-- Update the examples to new features (AABB tree with triangles in wuzy-level).
+- Replace Muratori's GJK variant with a proper GJK that finds the closest point on the simplex generically and remembers witness points on each collider for every support point - with this I can implement wuzy_gjk_toi properly with conservative advancements AND I can get contact points. Also I fixed more than a handful of weird edge cases and I am still finding them. I'm done with this approach.
+- Special case a fast path for Capsule-Triangle intersection
 - `wuzy_aabb_tree_update_node` with flags (rebuild subtree, rotate, re-insert)
 - Fast effective bvh updates for animated scenes
 - AABB Tree Rebalancing, bulk-insert of nodes that balances tree (for levels): https://box2d.org/files/ErinCatto_DynamicBVH_Full.pdf
