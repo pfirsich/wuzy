@@ -146,9 +146,9 @@ void create_colliders(const tinyobj::ObjReader& reader)
             index_offset += num_face_vertices;
         }
     }
-    const auto mesh = wuzy_hl_mesh_create(
+    const auto mesh = wuzy_hl_mesh_shape_create(
         vert_data, reader.GetAttrib().vertices.size(), indices.data(), indices.size() / 3);
-    const auto collider = wuzy_hl_collider_create_mesh(mesh);
+    const auto collider = wuzy_hl_collider_create_from_mesh_shape(mesh);
     wuzy_hl_collider_set_bitmask(collider, WORLD_MASK);
 }
 

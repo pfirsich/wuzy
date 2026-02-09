@@ -19,40 +19,40 @@ typedef struct {
 
 typedef struct {
     uint64_t id; // 0 is invalid
-} wuzy_hl_convex_polyhedron_id;
+} wuzy_hl_convex_shape_id;
 
 typedef struct {
     uint64_t id; // 0 is invalid
-} wuzy_hl_mesh_id;
+} wuzy_hl_mesh_shape_id;
 
 typedef struct {
     wuzy_allocator* allocator; // default will use malloc
     size_t max_num_colliders; // no default
-    size_t max_num_convex_polyhedra; // default: 16
-    size_t max_num_meshes; // default: 16
+    size_t max_num_convex_shapes; // default: 16
+    size_t max_num_mesh_shapes; // default: 16
 } wuzy_hl_create_params;
 
 void wuzy_hl_init(wuzy_hl_create_params params);
 void wuzy_hl_shutdown(void);
 
 // 3 floats per vertex, 3 indices per face. faces are triangles.
-wuzy_hl_convex_polyhedron_id wuzy_hl_convex_polyhedron_create(
+wuzy_hl_convex_shape_id wuzy_hl_convex_shape_create(
     const float* vertices, size_t num_vertices, const uint32_t* face_indices, size_t num_faces);
 // Destroying a convex polyhedron referenced by a collider is UB
-void wuzy_hl_convex_polyhedron_destroy(wuzy_hl_convex_polyhedron_id convex);
+void wuzy_hl_convex_shape_destroy(wuzy_hl_convex_shape_id convex);
 
 // This builds an optimized bounding volume hierarchy.
-wuzy_hl_mesh_id wuzy_hl_mesh_create(
+wuzy_hl_mesh_shape_id wuzy_hl_mesh_shape_create(
     const float* vertices, size_t num_vertices, const uint32_t* face_indices, size_t num_faces);
 // Destroying a mesh referenced by a collider is UB
-void wuzy_hl_mesh_destroy(wuzy_hl_mesh_id mesh);
+void wuzy_hl_mesh_shape_destroy(wuzy_hl_mesh_shape_id mesh);
 
 wuzy_hl_collider_id wuzy_hl_collider_create_sphere(float radius);
 wuzy_hl_collider_id wuzy_hl_collider_create_capsule(const float half_up[3], float radius);
-wuzy_hl_collider_id wuzy_hl_collider_create_convex_polyhedron(wuzy_hl_convex_polyhedron_id convex);
+wuzy_hl_collider_id wuzy_hl_collider_create_from_convex_shape(wuzy_hl_convex_shape_id convex);
 
 // Mesh colliders do not take into account the transform
-wuzy_hl_collider_id wuzy_hl_collider_create_mesh(wuzy_hl_mesh_id mesh);
+wuzy_hl_collider_id wuzy_hl_collider_create_from_mesh_shape(wuzy_hl_mesh_shape_id mesh);
 
 void wuzy_hl_collider_destroy(wuzy_hl_collider_id collider);
 
@@ -140,7 +140,7 @@ size_t wuzy_hl_ray_cast(const float start[3], const float dir[3], uint64_t bitma
 // so your usage of them might break at any time.
 wuzy_aabb_tree* wuzy_hl_get_aabb_tree();
 wuzy_collider* wuzy_hl_get_collider(wuzy_hl_collider_id collider);
-wuzy_aabb_tree* wuzy_hl_mesh_get_aabb_tree(wuzy_hl_mesh_id mesh);
+wuzy_aabb_tree* wuzy_hl_mesh_shape_get_aabb_tree(wuzy_hl_mesh_shape_id mesh);
 
 #ifdef __cplusplus
 }

@@ -45,7 +45,7 @@ struct Collider {
         Empty empty;
         wuzy_sphere_collider_userdata sphere;
         wuzy_capsule_collider_userdata capsule;
-        wuzy_hl_mesh_id mesh;
+        wuzy_hl_mesh_shape_id mesh;
     } collider_userdata;
 
     wuzy_aabb_tree_node node; // node in global aabb tree
@@ -204,8 +204,8 @@ EXPORT void wuzy_hl_init(wuzy_hl_create_params params)
     state->query = wuzy_aabb_tree_node_query_create(state->tree, alloc);
 
     state->convex_polyhedra.init(
-        alloc, params.max_num_convex_polyhedra ? params.max_num_convex_polyhedra : 16);
-    state->meshes.init(alloc, params.max_num_meshes ? params.max_num_meshes : 16);
+        alloc, params.max_num_convex_shapes ? params.max_num_convex_shapes : 16);
+    state->meshes.init(alloc, params.max_num_mesh_shapes ? params.max_num_mesh_shapes : 16);
     state->colliders.init(alloc, params.max_num_colliders);
 
     state->rc_tri_tmp_size = 64;
@@ -228,9 +228,9 @@ EXPORT void wuzy_hl_shutdown()
 
     destroy_all(state->colliders, wuzy_hl_collider_destroy);
     state->colliders.free(&state->alloc);
-    destroy_all(state->meshes, wuzy_hl_mesh_destroy);
+    destroy_all(state->meshes, wuzy_hl_mesh_shape_destroy);
     state->meshes.free(&state->alloc);
-    destroy_all(state->convex_polyhedra, wuzy_hl_convex_polyhedron_destroy);
+    destroy_all(state->convex_polyhedra, wuzy_hl_convex_shape_destroy);
     state->convex_polyhedra.free(&state->alloc);
 
     wuzy_aabb_tree_node_query_destroy(state->query);
@@ -240,7 +240,7 @@ EXPORT void wuzy_hl_shutdown()
     state = nullptr;
 }
 
-EXPORT wuzy_hl_convex_polyhedron_id wuzy_hl_convex_polyhedron_create(
+EXPORT wuzy_hl_convex_shape_id wuzy_hl_convex_shape_create(
     const float* vertices, size_t num_vertices, const uint32_t* face_indices, size_t num_faces)
 {
     auto convex = state->convex_polyhedra.insert();
@@ -260,7 +260,7 @@ EXPORT wuzy_hl_convex_polyhedron_id wuzy_hl_convex_polyhedron_create(
     return { state->convex_polyhedra.get_id(convex) };
 }
 
-EXPORT void wuzy_hl_convex_polyhedron_destroy(wuzy_hl_convex_polyhedron_id id)
+EXPORT void wuzy_hl_convex_shape_destroy(wuzy_hl_convex_shape_id id)
 {
     auto convex = state->convex_polyhedra.get(id.id);
     deallocate(&state->alloc, convex->userdata.vertices, convex->userdata.num_vertices * 3);
@@ -287,7 +287,7 @@ static void get_tri_aabb(const wuzy_triangle_collider_userdata& tri, float min[3
     }
 }
 
-EXPORT wuzy_hl_mesh_id wuzy_hl_mesh_create(
+EXPORT wuzy_hl_mesh_shape_id wuzy_hl_mesh_shape_create(
     const float* vertices, size_t num_vertices, const uint32_t* face_indices, size_t num_faces)
 {
     auto mesh = state->meshes.insert();
@@ -327,7 +327,7 @@ EXPORT wuzy_hl_mesh_id wuzy_hl_mesh_create(
     return { state->meshes.get_id(mesh) };
 }
 
-EXPORT void wuzy_hl_mesh_destroy(wuzy_hl_mesh_id id)
+EXPORT void wuzy_hl_mesh_shape_destroy(wuzy_hl_mesh_shape_id id)
 {
     auto mesh = state->meshes.get(id.id);
     wuzy_aabb_tree_node_query_destroy(mesh->query);
@@ -382,8 +382,8 @@ EXPORT wuzy_hl_collider_id wuzy_hl_collider_create_capsule(const float half_up[3
     return common_init(col);
 }
 
-EXPORT wuzy_hl_collider_id wuzy_hl_collider_create_convex_polyhedron(
-    wuzy_hl_convex_polyhedron_id convex_id)
+EXPORT wuzy_hl_collider_id wuzy_hl_collider_create_from_convex_shape(
+    wuzy_hl_convex_shape_id convex_id)
 {
     auto convex = state->convex_polyhedra.get(convex_id.id);
     auto col = state->colliders.insert();
@@ -393,7 +393,7 @@ EXPORT wuzy_hl_collider_id wuzy_hl_collider_create_convex_polyhedron(
     return common_init(col);
 }
 
-EXPORT wuzy_hl_collider_id wuzy_hl_collider_create_mesh(wuzy_hl_mesh_id mesh_id)
+EXPORT wuzy_hl_collider_id wuzy_hl_collider_create_from_mesh_shape(wuzy_hl_mesh_shape_id mesh_id)
 {
     const auto mesh = state->meshes.get(mesh_id.id);
     auto col = state->colliders.insert();
@@ -1004,7 +1004,7 @@ EXPORT wuzy_collider* wuzy_hl_get_collider(wuzy_hl_collider_id id)
     return &col->collider;
 }
 
-EXPORT wuzy_aabb_tree* wuzy_hl_mesh_get_aabb_tree(wuzy_hl_mesh_id id)
+EXPORT wuzy_aabb_tree* wuzy_hl_mesh_shape_get_aabb_tree(wuzy_hl_mesh_shape_id id)
 {
     auto mesh = state->meshes.get(id.id);
     return mesh->tree;
