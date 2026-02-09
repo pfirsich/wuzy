@@ -765,20 +765,17 @@ static bool get_hit_normal(Collider& moving, float matrix[16], const float delta
     return true;
 }
 
-EXPORT void wuzy_hl_move_and_slide(wuzy_hl_collider_id moving_id,
+static void move_and_slide(Collider& moving, const float delta[3],
     wuzy_hl_move_and_slide_params params, wuzy_hl_move_and_slide_result* out)
 {
-    auto moving = state->colliders.get(moving_id.id);
-    assert(is_convex(moving));
-
     float matrix[16];
-    std::memcpy(matrix, moving->collider.transform, sizeof(float) * 16);
+    std::memcpy(matrix, moving.collider.transform, sizeof(float) * 16);
 
     float start_pos[3];
     get_matrix_translation(matrix, start_pos);
 
-    float delta[3];
-    vec3_copy(delta, params.delta);
+    float cur_delta[3];
+    vec3_copy(cur_delta, delta);
 
     const auto skin = params.skin > 0.0f ? params.skin : 1e-4f;
     const auto min_delta = params.min_delta > 0.0f ? params.min_delta : 1e-6f;
@@ -794,31 +791,31 @@ EXPORT void wuzy_hl_move_and_slide(wuzy_hl_collider_id moving_id,
     size_t manifold_size = 0;
 
     for (uint32_t slide = 0; slide < 3; ++slide) {
-        const float vel_len = vec3_len(delta);
+        const float vel_len = vec3_len(cur_delta);
         if (vel_len < min_delta) {
             break;
         }
 
-        const auto hit = sweep_first_hit(*moving, delta, params.bitmask, 12);
+        const auto hit = sweep_first_hit(moving, cur_delta, params.bitmask, 12);
         if (!hit.collider) {
             // no collision -> move full distance
-            translate_matrix(matrix, delta);
-            set_transform(*moving, matrix);
-            delta[0] = 0.0f;
-            delta[1] = 0.0f;
-            delta[2] = 0.0f;
+            translate_matrix(matrix, cur_delta);
+            set_transform(moving, matrix);
+            cur_delta[0] = 0.0f;
+            cur_delta[1] = 0.0f;
+            cur_delta[2] = 0.0f;
             break;
         }
 
         float hit_normal[3];
-        if (!get_hit_normal(*moving, matrix, delta, hit, hit_normal)) {
+        if (!get_hit_normal(moving, matrix, cur_delta, hit, hit_normal)) {
             // See get_hit_normal. This was likely a very shallow or grazing collision, so we just
             // pretend there was none! Can't wait to regret this later :)
-            translate_matrix(matrix, delta);
-            set_transform(*moving, matrix);
-            delta[0] = 0.0f;
-            delta[1] = 0.0f;
-            delta[2] = 0.0f;
+            translate_matrix(matrix, cur_delta);
+            set_transform(moving, matrix);
+            cur_delta[0] = 0.0f;
+            cur_delta[1] = 0.0f;
+            cur_delta[2] = 0.0f;
             break;
         }
 
@@ -829,12 +826,12 @@ EXPORT void wuzy_hl_move_and_slide(wuzy_hl_collider_id moving_id,
         // Move to just before the collision
         const float safe_t = std::fmax(0.0f, hit.t - skin / vel_len);
         float step_delta[3];
-        vec3_scale(delta, safe_t, step_delta);
+        vec3_scale(cur_delta, safe_t, step_delta);
         translate_matrix(matrix, step_delta);
-        set_transform(*moving, matrix);
+        set_transform(moving, matrix);
 
         float remaining[3];
-        vec3_scale(delta, 1.0f - safe_t, remaining);
+        vec3_scale(cur_delta, 1.0f - safe_t, remaining);
 
         // You have to do this little dance, because if you just did
         // `vel = remaining - dot(remaining, normal) * normal` in a loop, you could introduce
@@ -846,7 +843,7 @@ EXPORT void wuzy_hl_move_and_slide(wuzy_hl_collider_id moving_id,
             // Compute remaining delta and project onto surface (slide)
             float proj[3];
             vec3_scale(hit_normal, vec3_dot(remaining, hit_normal), proj);
-            vec3_sub(remaining, proj, delta);
+            vec3_sub(remaining, proj, cur_delta);
         } else if (manifold_size == 1) {
             // We are in a crease (two planes crossing)
             float crease[3];
@@ -854,17 +851,17 @@ EXPORT void wuzy_hl_move_and_slide(wuzy_hl_collider_id moving_id,
             if (vec3_len2(crease) > 1e-6f) {
                 vec3_normalize(crease);
                 const float d = vec3_dot(remaining, crease);
-                vec3_scale(crease, d, delta);
+                vec3_scale(crease, d, cur_delta);
             } else {
                 // normals are nearly parallel, nothing left to do (velocity already constrained
                 // along n1)
-                vec3_copy(delta, remaining);
+                vec3_copy(cur_delta, remaining);
             }
         } else if (manifold_size == 2) {
             // We are in a corner, there is no way to slide -> just stop moving
-            delta[0] = 0.0f;
-            delta[1] = 0.0f;
-            delta[2] = 0.0f;
+            cur_delta[0] = 0.0f;
+            cur_delta[1] = 0.0f;
+            cur_delta[2] = 0.0f;
         }
 
         assert(manifold_size < 3);
@@ -875,14 +872,44 @@ EXPORT void wuzy_hl_move_and_slide(wuzy_hl_collider_id moving_id,
         float end_pos[3];
         get_matrix_translation(matrix, end_pos);
         vec3_sub(end_pos, start_pos, out->moved_delta);
-        vec3_copy(out->remaining_delta, delta);
+        vec3_copy(out->remaining_delta, cur_delta);
         out->hit = hit_any;
         if (hit_any) {
             vec3_copy(out->last_hit_normal, last_hit_normal);
-            out->last_hit_collider = { state->colliders.get_id(last_hit.collider) };
-            out->last_hit_face_index = last_hit.face_index;
+            out->last_hit_collider = last_hit_collider;
+            out->last_hit_face_index = last_hit_face_index;
+        } else {
+            out->last_hit_normal[0] = 0.0f;
+            out->last_hit_normal[1] = 0.0f;
+            out->last_hit_normal[2] = 0.0f;
+            out->last_hit_collider = { 0 };
+            out->last_hit_face_index = UINT32_MAX;
         }
     }
+}
+
+static wuzy_hl_move_and_slide_result move_and_slide(
+    Collider& collider, const float delta[3], wuzy_hl_move_and_slide_params params)
+{
+    wuzy_hl_move_and_slide_result res;
+    move_and_slide(collider, delta, params, &res);
+    return res;
+}
+
+EXPORT void wuzy_hl_move_and_slide(wuzy_hl_collider_id moving_id, const float delta[3],
+    wuzy_hl_move_and_slide_params params, wuzy_hl_move_and_slide_result* out)
+{
+    auto moving = state->colliders.get(moving_id.id);
+    assert(is_convex(moving));
+    move_and_slide(*moving, delta, params, out);
+}
+
+EXPORT wuzy_hl_move_and_slide_result wuzy_hl_move_and_slide_r(
+    wuzy_hl_collider_id moving, const float delta[3], wuzy_hl_move_and_slide_params params)
+{
+    wuzy_hl_move_and_slide_result res;
+    wuzy_hl_move_and_slide(moving, delta, params, &res);
+    return res;
 }
 
 template <typename T>

@@ -209,15 +209,9 @@ bool move_player(wuzy_hl_collider_id collider, glwx::Transform& trafo, glm::vec3
 
     wuzy_hl_collider_set_transform(collider, &trafo.getMatrix()[0].x);
 
-    wuzy_hl_move_and_slide_result res = {};
-    wuzy_hl_move_and_slide(collider,
-        {
-            .delta = { velocity.x * dt, velocity.y * dt, velocity.z * dt },
-            .skin = 1e-4f,
-            .min_delta = 1e-6f,
-            .bitmask = WORLD_MASK,
-        },
-        &res);
+    const auto delta = velocity * dt;
+    const auto res
+        = wuzy_hl_move_and_slide_r(collider, glm::value_ptr(delta), { .bitmask = WORLD_MASK });
     trafo.move(glm::make_vec3(res.moved_delta));
     // We would have to feed back the velocity, but walking up slopes would be really slow. Add this
     // back, once I implemented slope handling in wuzy_hl_move_and_slide. velocity =
