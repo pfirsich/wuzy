@@ -98,6 +98,25 @@ size_t wuzy_hl_get_all_collisions(
 
 typedef struct {
     uint64_t bitmask; // bitmask to select other colliders
+    uint32_t max_gjk_iterations; // default: 12
+    float normal_probe_t_eps; // eps to increase t for normal calculation, default: 1e-2f
+} wuzy_hl_convex_cast_params;
+
+typedef struct {
+    float t; // in [0, 1]
+    wuzy_hl_collider_id hit_collider; // 0 if no hit
+    float hit_normal[3]; // world-space push-out normal for moving collider
+    uint32_t hit_face_index; // set iff mesh
+    float penetration_depth; // iff t==0
+} wuzy_hl_convex_cast_result;
+
+// Moves the collider to just before the first hit
+// hit_normal may be (0, 0, 0) as getting the hit normal may fail.
+wuzy_hl_convex_cast_result wuzy_hl_convex_cast(
+    wuzy_hl_collider_id moving, const float delta[3], wuzy_hl_convex_cast_params params);
+
+typedef struct {
+    uint64_t bitmask; // bitmask to select other colliders
     float skin; // the distance to (attempt to) maintain between other colliders. default: 1e-4
     float min_delta; // slide is terminated if movement is below this threshold. default: 1e-6
 } wuzy_hl_move_and_slide_params;
