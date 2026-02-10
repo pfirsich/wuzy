@@ -133,7 +133,6 @@ typedef struct {
 
 // Kinematic sweep & slide for a convex collider (`moving`).
 // Moves `moving` by up to `delta` in world space.
-// `delta` is desired move in world space.
 // This updates the collider, so use `moved_delta`/`remaining_delta` to sync external state.
 // `out` may be NULL.
 void wuzy_hl_move_and_slide(wuzy_hl_collider_id moving, const float delta[3],
@@ -141,6 +140,43 @@ void wuzy_hl_move_and_slide(wuzy_hl_collider_id moving, const float delta[3],
 
 wuzy_hl_move_and_slide_result wuzy_hl_move_and_slide_r(
     wuzy_hl_collider_id moving, const float delta[3], wuzy_hl_move_and_slide_params params);
+
+typedef struct {
+    float skin; // see wuzy_hl_move_and_slide_params
+    float min_delta; // see wuzy_hl_move_and_slide_params
+    uint64_t bitmask; // see wuzy_hl_move_and_slide_params
+
+    float up[3]; // default: (0, 1, 0)
+    float snap_down_height; // max downward ground distance correction
+    float max_slope_deg; // maximum walkable slope angle
+    float ground_dist; // desired distance from collider origin to walkable ground
+} wuzy_hl_kcc_move_params;
+
+typedef struct {
+    float moved_delta[3];
+    float remaining_delta[3];
+
+    bool on_ground;
+    float ground_normal[3];
+    wuzy_hl_collider_id ground_collider;
+    uint32_t ground_face_index;
+
+    bool hit;
+    float last_hit_normal[3];
+    wuzy_hl_collider_id last_hit_collider;
+    uint32_t last_hit_face_index;
+} wuzy_hl_kcc_move_result;
+
+// Kinematic character controller
+// Moves `moving` (must be convex) by up to `delta` in world space.
+// See wuzy_hl_move_and_slide.
+// This makes the collider "float" (at height `ground_dist` above the ground).
+// `out` may be NULL.
+void wuzy_hl_kcc_move(wuzy_hl_collider_id moving, const float delta[3],
+    wuzy_hl_kcc_move_params params, wuzy_hl_kcc_move_result* out);
+
+wuzy_hl_kcc_move_result wuzy_hl_kcc_move_r(
+    wuzy_hl_collider_id moving, const float delta[3], wuzy_hl_kcc_move_params params);
 
 typedef struct {
     wuzy_hl_collider_id collider;

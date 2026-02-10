@@ -775,8 +775,14 @@ EXPORT wuzy_hl_convex_cast_result wuzy_hl_convex_cast(
     return convex_cast(*moving, delta, params);
 }
 
+struct SlopeLimit {
+    float up[3];
+    float max_slope_cos;
+};
+
 static void move_and_slide(Collider& moving, const float delta[3],
-    wuzy_hl_move_and_slide_params params, wuzy_hl_move_and_slide_result* out)
+    wuzy_hl_move_and_slide_params params, const SlopeLimit* slope_limit,
+    wuzy_hl_move_and_slide_result* out)
 {
     float matrix[16];
     std::memcpy(matrix, moving.collider.transform, sizeof(float) * 16);
@@ -798,6 +804,9 @@ static void move_and_slide(Collider& moving, const float delta[3],
     // This contains the collision normals. We constrain the remaining
     // velocity to the plane of the first collider, then the crease/axis of the first and second
     // collider and after the first hit, there the velocity is set to zero.
+    // See the comment referring to a "little dance" below.
+    // Other KCCs do not seem to do it this way and I do not understand how they manage to be
+    // stable. If I don't constrain to a crease, I get vibration in corners.
     static constexpr size_t manifold_max_size = 3;
     float manifold[manifold_max_size][3];
     size_t manifold_size = 0;
@@ -847,6 +856,27 @@ static void move_and_slide(Collider& moving, const float delta[3],
         last_hit_face_index = cast.hit_face_index;
         vec3_copy(last_hit_normal, cast.hit_normal);
 
+        // If we hit a non-walkable slope, constrain the normal to the horizontal component
+        // (remove the up component).
+        float constraint_normal[3];
+        vec3_copy(constraint_normal, cast.hit_normal);
+        bool hit_non_walkable_slope = false;
+        if (slope_limit) {
+            const float up_component = vec3_dot(cast.hit_normal, slope_limit->up);
+            hit_non_walkable_slope
+                = up_component > 0.0f && up_component < slope_limit->max_slope_cos;
+            if (hit_non_walkable_slope) {
+                float up_normal[3];
+                vec3_scale(slope_limit->up, up_component, up_normal);
+                vec3_sub(cast.hit_normal, up_normal, constraint_normal);
+                if (vec3_len2(constraint_normal) > 1e-6f) {
+                    vec3_normalize(constraint_normal);
+                } else {
+                    vec3_copy(constraint_normal, cast.hit_normal);
+                }
+            }
+        }
+
         // Move to just before the collision
         const float safe_t = std::fmax(0.0f, cast.t - skin / vel_len);
         float step_delta[3];
@@ -866,12 +896,12 @@ static void move_and_slide(Collider& moving, const float delta[3],
         if (manifold_size == 0) {
             // Compute remaining delta and project onto surface (slide)
             float proj[3];
-            vec3_scale(cast.hit_normal, vec3_dot(remaining, cast.hit_normal), proj);
+            vec3_scale(constraint_normal, vec3_dot(remaining, constraint_normal), proj);
             vec3_sub(remaining, proj, cur_delta);
         } else if (manifold_size == 1) {
             // We are in a crease (two planes crossing)
             float crease[3];
-            vec3_cross(manifold[0], cast.hit_normal, crease);
+            vec3_cross(manifold[0], constraint_normal, crease);
             if (vec3_len2(crease) > 1e-6f) {
                 vec3_normalize(crease);
                 const float d = vec3_dot(remaining, crease);
@@ -888,8 +918,19 @@ static void move_and_slide(Collider& moving, const float delta[3],
             cur_delta[2] = 0.0f;
         }
 
+        // Removing the up-component of the normal is not enough, we also have to remove
+        // the up-component of the delta. Otherwise you could push up steep walls.
+        if (hit_non_walkable_slope) {
+            const float up_component = vec3_dot(cur_delta, slope_limit->up);
+            if (up_component > 0.0f) {
+                float up_delta[3];
+                vec3_scale(slope_limit->up, up_component, up_delta);
+                vec3_sub(cur_delta, up_delta, cur_delta);
+            }
+        }
+
         assert(manifold_size < manifold_max_size);
-        vec3_copy(manifold[manifold_size++], cast.hit_normal);
+        vec3_copy(manifold[manifold_size++], constraint_normal);
     }
 
     if (out) {
@@ -912,11 +953,11 @@ static void move_and_slide(Collider& moving, const float delta[3],
     }
 }
 
-static wuzy_hl_move_and_slide_result move_and_slide(
-    Collider& collider, const float delta[3], wuzy_hl_move_and_slide_params params)
+static wuzy_hl_move_and_slide_result move_and_slide(Collider& collider, const float delta[3],
+    wuzy_hl_move_and_slide_params params, SlopeLimit* slope_limit)
 {
     wuzy_hl_move_and_slide_result res;
-    move_and_slide(collider, delta, params, &res);
+    move_and_slide(collider, delta, params, slope_limit, &res);
     return res;
 }
 
@@ -925,7 +966,7 @@ EXPORT void wuzy_hl_move_and_slide(wuzy_hl_collider_id moving_id, const float de
 {
     auto moving = state->colliders.get(moving_id.id);
     assert(is_convex(moving));
-    move_and_slide(*moving, delta, params, out);
+    move_and_slide(*moving, delta, params, nullptr, out);
 }
 
 EXPORT wuzy_hl_move_and_slide_result wuzy_hl_move_and_slide_r(
@@ -933,6 +974,188 @@ EXPORT wuzy_hl_move_and_slide_result wuzy_hl_move_and_slide_r(
 {
     wuzy_hl_move_and_slide_result res;
     wuzy_hl_move_and_slide(moving, delta, params, &res);
+    return res;
+}
+
+struct GroundProbeResult {
+    bool hit;
+    bool walkable;
+    float t;
+    float normal[3];
+    wuzy_hl_collider_id collider;
+    uint32_t face_index;
+};
+
+static GroundProbeResult probe_ground(
+    const float start[3], const float up[3], uint64_t bitmask, float max_dist, float slope_cos)
+{
+    GroundProbeResult ground = {};
+    ground.t = FLT_MAX;
+    ground.face_index = UINT32_MAX;
+
+    if (max_dist <= 0.0f) {
+        return ground;
+    }
+
+    float down[3];
+    vec3_scale(up, -1.0f, down);
+
+    wuzy_hl_ray_cast_result rc = {};
+    const auto n = wuzy_hl_ray_cast(start, down, bitmask, &rc, 1);
+    if (n == 0 || rc.hit.t > max_dist) {
+        return ground;
+    }
+
+    ground.hit = true;
+    ground.t = rc.hit.t;
+    vec3_copy(ground.normal, rc.hit.normal);
+    if (vec3_len2(ground.normal) > 0.0f) {
+        vec3_normalize(ground.normal);
+    }
+    ground.walkable = vec3_dot(ground.normal, up) >= slope_cos;
+    ground.collider = rc.collider;
+    ground.face_index = rc.face_index;
+    return ground;
+}
+
+EXPORT void wuzy_hl_kcc_move(wuzy_hl_collider_id moving_id, const float delta[3],
+    wuzy_hl_kcc_move_params params, wuzy_hl_kcc_move_result* out)
+{
+    // This collider "floats" (at height `ground_dist`), so that it can more easily step
+    // over cracks and steps.
+
+    auto moving = state->colliders.get(moving_id.id);
+    assert(is_convex(moving));
+
+    float up[3];
+    vec3_copy(up, params.up);
+    if (up[0] == 0.0f && up[1] == 0.0f && up[2] == 0.0f) {
+        up[0] = 0.0f;
+        up[1] = 1.0f;
+        up[2] = 0.0f;
+    } else {
+        vec3_normalize(up);
+    }
+
+    const auto skin = params.skin > 0.0f ? params.skin : 1e-4f;
+    const auto min_delta = params.min_delta > 0.0f ? params.min_delta : 1e-6f;
+    const auto ground_dist = std::fmax(params.ground_dist, 0.0f);
+    const auto slope_deg = params.max_slope_deg;
+    const auto slope_cos = std::cos(slope_deg * (M_PIf / 180.0f));
+    const auto max_ground_dist = ground_dist + params.snap_down_height;
+    SlopeLimit slope_limit = { { up[0], up[1], up[2] }, slope_cos };
+
+    float start_matrix[16];
+    std::memcpy(start_matrix, moving->collider.transform, sizeof(float) * 16);
+    float start_pos[3];
+    get_matrix_translation(start_matrix, start_pos);
+
+    const auto move
+        = move_and_slide(*moving, delta, { params.bitmask, skin, min_delta }, &slope_limit);
+
+    float chosen_remaining[3];
+    vec3_copy(chosen_remaining, move.remaining_delta);
+
+    bool hit_any = move.hit;
+    float last_hit_normal[3] = { 0.0f, 0.0f, 0.0f };
+    wuzy_hl_collider_id last_hit_collider = { 0 };
+    uint32_t last_hit_face_index = UINT32_MAX;
+    if (move.hit) {
+        vec3_copy(last_hit_normal, move.last_hit_normal);
+        last_hit_collider = move.last_hit_collider;
+        last_hit_face_index = move.last_hit_face_index;
+    }
+
+    const auto moving_up = vec3_dot(delta, up) > min_delta;
+    GroundProbeResult ground = {};
+    // If we are on walkable ground, fix our height to the target ground distance (ground_dist).
+    // This helps with walking over uneven terrain, walking over steps and with sticking to slopes
+    // while walking down and up.
+    if (!moving_up) {
+        // There is an argument for doing multiple iterations here, because the move_and_slide
+        // at the end of the loop might change the ground distance again and we should have to
+        // repeat the process a couple of times to converge.
+        // But this will also converge across multiple frames and being able to use `break` here
+        // is useful, so I keep the single-iteration loop for now.
+        float pos[3];
+        for (size_t i = 0; i < 1; ++i) {
+            get_matrix_translation(moving->collider.transform, pos);
+            ground = probe_ground(pos, up, params.bitmask, max_ground_dist, slope_cos);
+            if (!ground.hit || !ground.walkable) {
+                // we are not on (walkable) ground, don't correct height
+                break;
+            }
+
+            // ground hit and walkable
+            const float ground_delta = ground.t - ground_dist;
+            if (std::fabs(ground_delta) <= min_delta) {
+                // close enough to target distance
+                break;
+            }
+            float corr_delta[3];
+            vec3_scale(up, -ground_delta, corr_delta);
+
+            // do the move
+            const auto corr_move = move_and_slide(
+                *moving, corr_delta, { params.bitmask, skin, min_delta }, &slope_limit);
+            if (corr_move.hit) {
+                hit_any = true;
+                vec3_copy(last_hit_normal, corr_move.last_hit_normal);
+                last_hit_collider = corr_move.last_hit_collider;
+                last_hit_face_index = corr_move.last_hit_face_index;
+            }
+        }
+
+        get_matrix_translation(moving->collider.transform, pos);
+        ground = probe_ground(pos, up, params.bitmask, max_ground_dist, slope_cos);
+    }
+
+    if (out) {
+        std::memset(out, 0, sizeof(*out));
+        out->ground_face_index = UINT32_MAX;
+        out->last_hit_face_index = UINT32_MAX;
+
+        float end_pos[3];
+        get_matrix_translation(moving->collider.transform, end_pos);
+        vec3_sub(end_pos, start_pos, out->moved_delta);
+        vec3_copy(out->remaining_delta, chosen_remaining);
+
+        bool contact_ground = false;
+        float contact_ground_normal[3] = { 0.0f, 0.0f, 0.0f };
+        if (hit_any) {
+            vec3_copy(contact_ground_normal, last_hit_normal);
+            if (vec3_len2(contact_ground_normal) > 0.0f) {
+                vec3_normalize(contact_ground_normal);
+                contact_ground = vec3_dot(contact_ground_normal, up) >= slope_cos;
+            }
+        }
+
+        const bool probe_grounded = ground.hit && ground.walkable;
+        out->on_ground = probe_grounded || contact_ground;
+        if (probe_grounded) {
+            vec3_copy(out->ground_normal, ground.normal);
+            out->ground_collider = ground.collider;
+            out->ground_face_index = ground.face_index;
+        } else if (contact_ground) {
+            vec3_copy(out->ground_normal, contact_ground_normal);
+            out->ground_collider = last_hit_collider;
+            out->ground_face_index = last_hit_face_index;
+        }
+
+        out->hit = hit_any;
+        if (hit_any) {
+            vec3_copy(out->last_hit_normal, last_hit_normal);
+            out->last_hit_collider = last_hit_collider;
+            out->last_hit_face_index = last_hit_face_index;
+        }
+    }
+}
+
+EXPORT wuzy_hl_kcc_move_result wuzy_hl_kcc_move_r(
+    wuzy_hl_collider_id moving, const float delta[3], wuzy_hl_kcc_move_params params)
+{
+    wuzy_hl_kcc_move_result res;
+    wuzy_hl_kcc_move(moving, delta, params, &res);
     return res;
 }
 

@@ -153,7 +153,7 @@ void create_colliders(const tinyobj::ObjReader& reader)
 }
 
 bool move_player(wuzy_hl_collider_id collider, glwx::Transform& trafo, glm::vec3& velocity,
-    const glm::vec3& move, bool jump, float dt)
+    bool& on_ground, const glm::vec3& move, bool jump, float dt)
 {
     constexpr float accel = 20.0f;
     constexpr float max_speed = 5.0f;
@@ -162,21 +162,11 @@ bool move_player(wuzy_hl_collider_id collider, glwx::Transform& trafo, glm::vec3
     constexpr float max_fall_speed = 15.0f;
     constexpr float jump_height = 1.0f;
 
-    const auto ray_start = trafo.getPosition();
-    const glm::vec3 ray_dir = { 0.0f, -1.0f, 0.0f };
-    wuzy_hl_ray_cast_result rc;
-    const auto hit = wuzy_hl_ray_cast(&ray_start.x, &ray_dir.x, WORLD_MASK, &rc, 1);
-    // kind of controls walkable slope height
-    const auto on_ground = hit && rc.hit.t < 0.71f && velocity.y <= 0.0f;
     if (on_ground) {
         if (velocity.y < 0.0f) {
             velocity.y = 0.0f;
         }
         if (jump) {
-            // v(t) = v0 - g*t => s(t) = v0*t - 0.5*g*t*t
-            // v(T) = 0 <=> v0 = g*T
-            // s(T) = v0*T - 0.5*g*T*T = v0*v0/g - 0.5*v0*v0/g = 0.5*v0*v0/g
-            // <=> sqrt(2*s(T)*g) = v0
             velocity.y = glm::sqrt(2 * jump_height * gravity);
         }
     } else {
@@ -194,7 +184,8 @@ bool move_player(wuzy_hl_collider_id collider, glwx::Transform& trafo, glm::vec3
         const auto vel_xz = glm::vec3(velocity.x, 0.0f, velocity.z);
         const auto move_speed = glm::length(vel_xz);
         if (move_speed > max_speed) {
-            velocity *= max_speed / move_speed;
+            velocity.x *= max_speed / move_speed;
+            velocity.z *= max_speed / move_speed;
         }
     } else {
         const auto vel_xz = glm::vec3(velocity.x, 0.0f, velocity.z);
@@ -209,16 +200,21 @@ bool move_player(wuzy_hl_collider_id collider, glwx::Transform& trafo, glm::vec3
 
     wuzy_hl_collider_set_transform(collider, &trafo.getMatrix()[0].x);
 
-    const auto delta = velocity * dt;
-    const auto res
-        = wuzy_hl_move_and_slide_r(collider, glm::value_ptr(delta), { .bitmask = WORLD_MASK });
+    wuzy_hl_kcc_move_result res = {};
+    const float delta[3] = { velocity.x * dt, velocity.y * dt, velocity.z * dt };
+    wuzy_hl_kcc_move(collider, delta,
+        {
+            .bitmask = WORLD_MASK,
+            .snap_down_height = 0.35f,
+            .max_slope_deg = 60.0f,
+            .ground_dist = 0.65f,
+        },
+        &res);
     trafo.move(glm::make_vec3(res.moved_delta));
-    // We would have to feed back the velocity, but walking up slopes would be really slow. Add this
-    // back, once I implemented slope handling in wuzy_hl_move_and_slide. velocity =
-    // glm::make_vec3(res.remaining_delta) / dt;
-    if (on_ground && !jump) {
+    if (res.on_ground && velocity.y < 0.0f) {
         velocity.y = 0.0f;
     }
+    on_ground = res.on_ground;
     return res.hit;
 }
 
@@ -277,6 +273,7 @@ int main()
     const auto player_radius = 0.35f;
     const auto player_height = 0.25f;
     bool last_jump = false;
+    bool player_on_ground = false;
     auto player_mesh
         = glwx::makeCapsuleMesh(vfmt, { 0, 1, 2 }, player_radius, player_height / 2.0f, 32, 16, 1);
     const float half_up[3] = { 0.0f, player_height / 2.0f, 0.0f };
@@ -374,8 +371,8 @@ int main()
                 = glm::length(move_vec) > 0.0f ? glm::normalize(move_vec) : glm::vec3(0.0f);
 
             if (input_mode == InputMode::Fps) {
-                move_player(
-                    player_collider, player_trafo, player_velocity, move, jump, sim_step_dt);
+                move_player(player_collider, player_trafo, player_velocity, player_on_ground, move,
+                    jump, sim_step_dt);
                 camera_trafo.setPosition(player_trafo.getPosition());
             }
             if (input_mode == InputMode::Camera) {
