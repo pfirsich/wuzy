@@ -1039,7 +1039,7 @@ EXPORT void wuzy_hl_kcc_move(wuzy_hl_collider_id moving_id, const float delta[3]
     const auto min_delta = params.min_delta > 0.0f ? params.min_delta : 1e-6f;
     const auto ground_dist = std::fmax(params.ground_dist, 0.0f);
     const auto slope_deg = params.max_slope_deg;
-    const auto slope_cos = std::cos(slope_deg * (M_PIf / 180.0f));
+    const auto slope_cos = cosf(slope_deg * (float)(M_PIf / 180.0f));
     const auto max_ground_dist = ground_dist + params.snap_down_height;
     SlopeLimit slope_limit = { { up[0], up[1], up[2] }, slope_cos };
 
