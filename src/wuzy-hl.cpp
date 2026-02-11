@@ -7,8 +7,6 @@
 
 #include "shared.hpp"
 
-#include <fmt/core.h>
-
 #define EXPORT extern "C"
 
 using namespace wuzy;
