@@ -312,15 +312,12 @@ EXPORT wuzy_hl_mesh_shape_id wuzy_hl_mesh_shape_create(
         get_tri_aabb(mesh->tris[i], mesh->aabb_min, mesh->aabb_max);
     }
 
-    auto nodes = allocate<wuzy_aabb_tree_init_node>(&state->alloc, mesh->num_tris);
-    std::memset(nodes, 0, mesh->num_tris * sizeof(wuzy_aabb_tree_init_node));
+    float aabb_min[3], aabb_max[3];
     for (size_t t = 0; t < mesh->num_tris; ++t) {
-        nodes[t].userdata = &mesh->tris[t];
-        init_aabb(nodes[t].aabb_min, nodes[t].aabb_max);
-        get_tri_aabb(mesh->tris[t], nodes[t].aabb_min, nodes[t].aabb_max);
+        init_aabb(aabb_min, aabb_max);
+        get_tri_aabb(mesh->tris[t], aabb_min, aabb_max);
+        wuzy_aabb_tree_insert(mesh->tree, &mesh->tris[t], 0, aabb_min, aabb_max);
     }
-    wuzy_aabb_tree_build(mesh->tree, nodes, mesh->num_tris);
-    deallocate(&state->alloc, nodes, mesh->num_tris);
 
     return { state->meshes.get_id(mesh) };
 }

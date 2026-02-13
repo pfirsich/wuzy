@@ -41,7 +41,8 @@ wuzy_hl_convex_shape_id wuzy_hl_convex_shape_create(
 // Destroying a convex polyhedron referenced by a collider is UB
 void wuzy_hl_convex_shape_destroy(wuzy_hl_convex_shape_id convex);
 
-// This builds an optimized bounding volume hierarchy.
+// This constructs a bounding volume hierarchy for the mesh as fast as possible
+// TODO: Add back API to load offline-optimized trees
 wuzy_hl_mesh_shape_id wuzy_hl_mesh_shape_create(
     const float* vertices, size_t num_vertices, const uint32_t* face_indices, size_t num_faces);
 // Destroying a mesh referenced by a collider is UB
