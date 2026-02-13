@@ -16,6 +16,9 @@
 
 namespace wuzy {
 
+static constexpr float eps = FLT_EPSILON;
+static constexpr float eps2 = FLT_EPSILON * FLT_EPSILON;
+
 static constexpr int x = 0;
 static constexpr int y = 1;
 static constexpr int z = 2;
@@ -920,16 +923,20 @@ static NextSimplexResult line(const wuzy_simplex3d& simplex, vec3_view /*directi
         // product will give us a vector that is coplanar with ab and ao and perpendicular
         // to ab. This is roughly the vector from the line ab towards the origin.
         auto dir = cross(cross(ab, ao), ab);
-        if (dot(dir, dir) < FLT_EPSILON) {
+        if (dot(dir, dir) < eps2) {
             // This will happen if a, b and the origin are (roughly) collinear!
             // Pick any direction orthogonal to ab.
             // https://box2d.org/posts/2014/02/computing-a-basis/
+            if (dot(ab, ab) < eps2) {
+                // can't normalize, fall back to point
+                return { a, ao };
+            }
             dir = normalize(ab);
             assert(is_finite(dir));
             dir = std::abs(dir.x) >= 0.57735f ? vec3 { dir.y, -dir.x, 0.0f }
                                               : vec3 { 0.0f, dir.z, -dir.y };
         }
-        assert(length(dir) > FLT_EPSILON);
+        assert(is_finite(dir));
         return { simplex, dir };
     } else {
         // <2>
@@ -1002,7 +1009,12 @@ static NextSimplexResult triangle(const wuzy_simplex3d& simplex, vec3_view direc
             // The direction is a vector orthogonal to the edge `ac`, but pointing towards
             // the origin.
             const auto dir = cross(cross(ac, ao), ac);
-            assert(is_finite(dir) && length(dir) > FLT_EPSILON);
+            assert(is_finite(dir));
+            if (length(dir) < eps) {
+                // If dir is not long enough that means cross(ac, ao) is very small, i.e.
+                // origin is almost on ac (or ac is tiny). Fall back to line.
+                return line(make_simplex(a, c), direction);
+            }
             return { a, c, dir };
         } else {
             // <5>
@@ -1018,7 +1030,27 @@ static NextSimplexResult triangle(const wuzy_simplex3d& simplex, vec3_view direc
     }
 
     // <2> or <3> are left
-    assert(is_finite(abc) && length(abc) > FLT_EPSILON);
+    assert(is_finite(abc));
+    if (dot(abc, abc) < eps2) {
+        // The triangle is degenerate and actually a line (or a point).
+        // We need to figure out which two points span that line and then fall back to that line.
+        const auto bc = sub(c, b);
+        const auto ab_len2 = dot(ab, ab);
+        const auto ac_len2 = dot(ac, ac);
+        const auto bc_len2 = dot(bc, bc);
+        if (ab_len2 >= ac_len2 && ab_len2 >= bc_len2 && ab_len2 > eps2) {
+            return line(make_simplex(a, b), direction);
+        }
+        if (ac_len2 >= bc_len2 && ac_len2 > eps2) {
+            return line(make_simplex(a, c), direction);
+        }
+        if (bc_len2 > eps2) {
+            return line(make_simplex(b, c), direction);
+        }
+        // It's actually a point even! (we can pick any)
+        return { a, ao };
+    }
+
     if (same_half_space(abc, ao)) {
         // "above" the triangle
         return { simplex, abc, false };
