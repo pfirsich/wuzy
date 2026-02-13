@@ -42,9 +42,27 @@ wuzy_hl_convex_shape_id wuzy_hl_convex_shape_create(
 void wuzy_hl_convex_shape_destroy(wuzy_hl_convex_shape_id convex);
 
 // This constructs a bounding volume hierarchy for the mesh as fast as possible
-// TODO: Add back API to load offline-optimized trees
 wuzy_hl_mesh_shape_id wuzy_hl_mesh_shape_create(
-    const float* vertices, size_t num_vertices, const uint32_t* face_indices, size_t num_faces);
+    const float* vertices, size_t num_vertices, const uint32_t* tri_indices, size_t num_tris);
+
+typedef struct wuzy_hl_mesh_init_node wuzy_hl_mesh_init_node;
+
+struct wuzy_hl_mesh_init_node {
+    // for internal nodes, left_index and right_index are node indices and tri_index must be
+    // UINT32_MAX.
+    // for leaf nodes, left_index and right_index must be UINT32_MAX and tri_index is the triangle
+    // index.
+    uint32_t tri_index;
+    float aabb_min[3];
+    float aabb_max[3];
+    uint32_t left_index;
+    uint32_t right_index;
+};
+
+wuzy_hl_mesh_shape_id wuzy_hl_mesh_shape_create_tree(const float* vertices, size_t num_vertices,
+    const uint32_t* tri_indices, size_t num_tris, const wuzy_hl_mesh_init_node* nodes,
+    size_t num_nodes, uint32_t root_index);
+
 // Destroying a mesh referenced by a collider is UB
 void wuzy_hl_mesh_shape_destroy(wuzy_hl_mesh_shape_id mesh);
 

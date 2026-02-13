@@ -285,22 +285,22 @@ static void get_tri_aabb(const wuzy_triangle_collider_userdata& tri, float min[3
     }
 }
 
-EXPORT wuzy_hl_mesh_shape_id wuzy_hl_mesh_shape_create(
-    const float* vertices, size_t num_vertices, const uint32_t* face_indices, size_t num_faces)
+static Mesh* mesh_shape_create_common(
+    const float* vertices, size_t num_vertices, const uint32_t* tri_indices, size_t num_tris)
 {
     auto mesh = state->meshes.insert();
 
-    mesh->tris = allocate<wuzy_triangle_collider_userdata>(&state->alloc, num_faces);
-    mesh->num_tris = num_faces;
-    mesh->tree = wuzy_aabb_tree_create(num_faces, &state->alloc);
+    mesh->tris = allocate<wuzy_triangle_collider_userdata>(&state->alloc, num_tris);
+    mesh->num_tris = num_tris;
+    mesh->tree = wuzy_aabb_tree_create(num_tris, &state->alloc);
     mesh->query = wuzy_aabb_tree_node_query_create(mesh->tree, &state->alloc);
 
     init_aabb(mesh->aabb_min, mesh->aabb_max);
 
-    for (size_t i = 0; i < num_faces; ++i) {
-        const auto i0 = face_indices[i * 3 + 0];
-        const auto i1 = face_indices[i * 3 + 1];
-        const auto i2 = face_indices[i * 3 + 2];
+    for (size_t i = 0; i < num_tris; ++i) {
+        const auto i0 = tri_indices[i * 3 + 0];
+        const auto i1 = tri_indices[i * 3 + 1];
+        const auto i2 = tri_indices[i * 3 + 2];
 
         assert(i0 < num_vertices && i1 < num_vertices && i2 < num_vertices);
         std::memcpy(mesh->tris[i].vertices[0], vertices + i0 * 3, sizeof(float) * 3);
@@ -312,12 +312,53 @@ EXPORT wuzy_hl_mesh_shape_id wuzy_hl_mesh_shape_create(
         get_tri_aabb(mesh->tris[i], mesh->aabb_min, mesh->aabb_max);
     }
 
+    return mesh;
+}
+
+EXPORT wuzy_hl_mesh_shape_id wuzy_hl_mesh_shape_create(
+    const float* vertices, size_t num_vertices, const uint32_t* tri_indices, size_t num_tris)
+{
+    auto mesh = mesh_shape_create_common(vertices, num_vertices, tri_indices, num_tris);
+
     float aabb_min[3], aabb_max[3];
     for (size_t t = 0; t < mesh->num_tris; ++t) {
         init_aabb(aabb_min, aabb_max);
         get_tri_aabb(mesh->tris[t], aabb_min, aabb_max);
         wuzy_aabb_tree_insert(mesh->tree, &mesh->tris[t], 0, aabb_min, aabb_max);
     }
+
+    return { state->meshes.get_id(mesh) };
+}
+
+EXPORT wuzy_hl_mesh_shape_id wuzy_hl_mesh_shape_create_tree(const float* vertices,
+    size_t num_vertices, const uint32_t* tri_indices, size_t num_tris,
+    const wuzy_hl_mesh_init_node* nodes, size_t num_nodes, uint32_t root_index)
+{
+    assert(nodes);
+    assert(num_nodes > 0);
+    assert(root_index < num_nodes);
+
+    auto mesh = mesh_shape_create_common(vertices, num_vertices, tri_indices, num_tris);
+
+    auto init_nodes = allocate<wuzy_aabb_tree_init_node>(&state->alloc, num_nodes);
+    std::memset(init_nodes, 0, num_nodes * sizeof(wuzy_aabb_tree_init_node));
+    for (size_t i = 0; i < num_nodes; ++i) {
+        std::memcpy(init_nodes[i].aabb_min, nodes[i].aabb_min, sizeof(float) * 3);
+        std::memcpy(init_nodes[i].aabb_max, nodes[i].aabb_max, sizeof(float) * 3);
+        if (nodes[i].tri_index == UINT32_MAX) {
+            assert(nodes[i].left_index < num_nodes && nodes[i].right_index < num_nodes);
+            init_nodes[i].left = init_nodes + nodes[i].left_index;
+            init_nodes[i].right = init_nodes + nodes[i].right_index;
+        } else {
+            assert(nodes[i].left_index == UINT32_MAX && nodes[i].right_index == UINT32_MAX);
+            assert(nodes[i].tri_index < num_tris);
+            init_nodes[i].userdata = &mesh->tris[nodes[i].tri_index];
+        }
+    }
+
+    [[maybe_unused]] const auto ok = wuzy_aabb_tree_init(mesh->tree, init_nodes + root_index);
+    assert(ok);
+    deallocate(&state->alloc, init_nodes, num_nodes);
 
     return { state->meshes.get_id(mesh) };
 }
