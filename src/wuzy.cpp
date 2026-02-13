@@ -271,7 +271,7 @@ static bool ray_cast(vec3_view aabb_min, vec3_view aabb_max, vec3_view start, ve
     float tmin = 0.0f;
     float tmax = FLT_MAX;
     for (size_t axis = 0; axis < 3; ++axis) {
-        if (std::abs(dir[axis]) < FLT_EPSILON) {
+        if (std::abs(dir[axis]) < eps) {
             // Ray is parallel to slab. No hit if origin not within slab.
             if (start[axis] < aabb_min[axis] || start[axis] > aabb_max[axis]) {
                 return false;
@@ -534,7 +534,7 @@ EXPORT bool wuzy_triangle_collider_ray_cast(
 
     // Check if ray points in direction of triangle normal (or is coplanar)
     const auto d = -dot(v3(tri.normal), v3(dir));
-    if (d <= FLT_EPSILON) {
+    if (d < eps) {
         return false;
     }
 
@@ -1191,7 +1191,7 @@ static bool gjk(Support support, wuzy_simplex3d* result, wuzy_gjk_debug* debug)
     const auto a0 = support(direction);
 
     // If the first support point is at the origin, shapes are touching
-    if (length(a0) < FLT_EPSILON) {
+    if (length(a0) < eps) {
         return true;
     }
 
@@ -1213,7 +1213,7 @@ static bool gjk(Support support, wuzy_simplex3d* result, wuzy_gjk_debug* debug)
         // If direction degenerates, either the geometry is broken or
         // the simplex boundary is actually very close to the origin.
         // This could also be a false positive, but I don't know how to do this properly.
-        if (length(direction) <= FLT_EPSILON) {
+        if (length(direction) < eps) {
             return true;
         }
 
@@ -1298,7 +1298,7 @@ EXPORT bool wuzy_gjk_toi(const wuzy_collider* moving, const wuzy_collider* targe
     const auto del = v3(delta);
 
     // If delta is almost zero, just test static collision
-    if (length(del) < FLT_EPSILON) {
+    if (length(del) < eps) {
         wuzy_simplex3d simplex = {};
         if (wuzy_gjk(moving, target, &simplex, nullptr)) {
             *out_t = 0.0f;
@@ -1441,7 +1441,7 @@ EXPORT wuzy_collision_result wuzy_epa(const wuzy_collider* c1, const wuzy_collid
     // looking from the face defined by v1, v2, v3 (b, c, d).
     // From that you can derive a correct winding order (see below).
 
-    // If the origin is very close to a face of the initial simplex (< FLT_EPSILON),
+    // If the origin is very close to a face of the initial simplex (< eps),
     // it's possible that GJK will determine that the origin is inside the simplex, but
     // `update_normal` above will disagree, just because of floating point errors and try
     // to flip a normal, creating internal geometry/a simplex with holes/a face
